@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { buildSystemPrompt } from "./system-prompt.js";
-import { ASSISTANT_TOOLS, executeTool } from "./tools.js";
+import { Server as SocketIOServer } from "socket.io";
+import { ASSISTANT_TOOLS, executeTool, type CartAddition, type ToolContext } from "./tools.js";
 import { createLlmProvider, type LlmProvider } from "./llm/index.js";
 import { logUnansweredQuestion } from "./unanswered-questions.js";
 
@@ -47,9 +48,15 @@ async function getOrCreateProfile(prisma: PrismaClient) {
 
 export async function handleChatMessage(
   prisma: PrismaClient,
-  visitorId: string,
-  userMessage: string
-): Promise<string> {
+  io: SocketIOServer,
+  params: {
+    visitorId: string;
+    userMessage: string;
+    tableToken?: string;
+    dinerName?: string;
+  }
+): Promise<{ reply: string; cartAdditions: CartAddition[] }> {
+  const { visitorId, userMessage } = params;
   const [profile, hours, faqItems] = await Promise.all([
     getOrCreateProfile(prisma),
     prisma.restaurantHour.findMany(),
@@ -76,13 +83,24 @@ export async function handleChatMessage(
 
   const { cacheable, dynamic } = buildSystemPrompt({ profile, hours, faqItems });
 
+  // El visitorId del chat es el mismo id anonimo con que el comensal pide desde su celular,
+  // asi "¿como va mi pedido?" sabe cuales platos son suyos.
+  const toolContext: ToolContext = {
+    prisma,
+    io,
+    tableToken: params.tableToken ?? null,
+    dinerId: visitorId,
+    dinerName: params.dinerName ?? null,
+    cartAdditions: [],
+  };
+
   const rawText = await getLlmProvider().generateReply({
     cacheableSystemPrompt: cacheable,
     dynamicSystemPrompt: dynamic,
     tools: ASSISTANT_TOOLS,
     history,
     userMessage,
-    executeTool: (name, input) => executeTool(prisma, name, input),
+    executeTool: (name, input) => executeTool(toolContext, name, input),
   });
   const finalText = stripMarkdown(rawText);
 
@@ -97,5 +115,5 @@ export async function handleChatMessage(
     await logUnansweredQuestion(prisma, userMessage);
   }
 
-  return finalText;
+  return { reply: finalText, cartAdditions: toolContext.cartAdditions };
 }

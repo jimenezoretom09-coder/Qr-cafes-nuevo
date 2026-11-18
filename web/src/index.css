@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Colores de marca por defecto (R G B). Cada cafe los cambia desde Admin. */
+  --epi-ink: 27 28 28;
+  --epi-gold: 119 90 25;
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -10,3 +16,9 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes rms-pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: rms-pop 180ms ease-out; }

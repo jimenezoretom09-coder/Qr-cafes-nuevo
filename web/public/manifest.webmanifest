@@ -1,6 +1,6 @@
 {
-  "name": "RMS — Gestión de Restaurante",
-  "short_name": "RMS",
+  "name": "RMS Cafés",
+  "short_name": "RMS Cafés",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

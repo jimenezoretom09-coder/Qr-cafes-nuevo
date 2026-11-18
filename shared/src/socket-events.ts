@@ -5,7 +5,9 @@ import type {
   OrderItemStatus,
   OrderTotalsDTO,
   PaymentDTO,
+  ServiceRequestDTO,
   TableStatus,
+  TicketDTO,
 } from "./types.js";
 
 /** Room helpers — keep naming consistent between server emitters and client subscribers. */
@@ -67,6 +69,10 @@ export interface ServerToClientEvents {
   "cash:session_closed": (payload: CashSessionDTO) => void;
   "approval:requested": (payload: ApprovalRequestDTO) => void;
   "approval:decided": (payload: ApprovalRequestDTO) => void;
+  /** Una comanda cambio (nueva, platos agregados, nuevo estado). Va a todo el personal. */
+  "ticket:updated": (payload: TicketDTO) => void;
+  "service:requested": (payload: ServiceRequestDTO) => void;
+  "service:updated": (payload: ServiceRequestDTO) => void;
 }
 
 export interface ClientToServerEvents {

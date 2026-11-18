@@ -73,8 +73,8 @@ export default function TableManager() {
       )}
 
       <p className="mb-3 text-xs text-slate-500">
-        Si le cambias el nombre a una mesa, el código QR que tenga impreso deja de funcionar — hay que imprimir uno
-        nuevo con el nombre actualizado.
+        El QR de cada mesa no depende del nombre: puedes renombrarla sin reimprimir. Los QR se imprimen desde
+        "Códigos QR".
       </p>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

@@ -1,5 +1,32 @@
 # Roadmap
 
+## RMS Cafés (implementada — noviembre 2026)
+Base: la plantilla de restaurantes (fases 1–3 abajo). Lo nuevo para cafés:
+- **QR con código secreto por mesa** (`/m/<publicToken>`), página Admin → Códigos QR que los
+  imprime con logo y colores del café, y botón para cambiar el código de una mesa.
+- **Nombre del comensal** al escanear (opcional). Cada plato queda con quién lo pidió
+  (`OrderItem.dinerId/dinerName`); la cuenta se ve dividida por persona.
+- **Comandas por mesa** (`OrderTicket`): lo que pide una mesa mientras cocina no confirma entra
+  en la misma comanda. Estados: Enviado → Recibido por cocina (al abrir el tablero) → Confirmado →
+  Preparando → Listo → En camino → Entregado, o Rechazado. Fila en orden de llegada, con puesto en
+  la fila y tiempo estimado para el cliente.
+- **Agotado** por plato desde la comanda (cancela ese plato con motivo y lo apaga en la carta) y
+  pestaña Agotados en cocina.
+- **Llamar al mesero / pedir la cuenta** desde el celular del cliente (`ServiceRequest`), con
+  alcance (toda la mesa / solo lo mío) y forma de pago; botón 🔔 para mesero, caja y dueño.
+- **Notificaciones push** (web-push + service worker) al personal con el celular bloqueado.
+- **Marca por café**: logo y colores en `RestaurantProfile`, aplicados a la carta.
+- **Asistente que pide**: tools `add_to_cart`, `get_order_status`, `call_staff`.
+- **Video 360°** en bucle con visor a pantalla completa.
+- **Café Demo** (`SEED=demo`) para demostraciones de venta.
+
+Pendiente / ideas:
+- Realidad aumentada (ver el plato sobre la mesa con la cámara): técnicamente viable con
+  `<model-viewer>` en el navegador, pero cada plato necesita un modelo 3D escaneado. Decidido
+  dejarlo fuera por ahora; solo video 360°.
+- Pago desde el celular (pasarela) — descartado por ahora: el pago es en caja o con el mesero.
+
+
 ## Fase 1 — MVP (implementada)
 Auth por PIN + roles/permisos configurables, mapa de mesas, toma de pedidos con modificadores/notas,
 enrutamiento automático por estación de cocina, KDS en tiempo real (Socket.IO) con temporizadores y

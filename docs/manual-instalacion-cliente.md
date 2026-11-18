@@ -1,13 +1,21 @@
-# Manual de instalación — restaurante nuevo
+# Manual de instalación — café nuevo (RMS Cafés)
 
-Proceso para instalar el sistema en un restaurante nuevo. Cada restaurante es una instalación
+Proceso para instalar RMS Cafés en un café nuevo. Cada café es una instalación
 **independiente**: su propio repositorio, su propia base de datos (Neon), su propio servidor
 (Render) y su propio sitio (Netlify). Si algo falla en un cliente, no afecta a los demás.
 
 Los pasos marcados **(Jimena)** son los únicos que necesitan que ella esté presente: crear o
 verificar cuentas, y comprar el dominio. Todo lo demás lo hace Claude.
 
-Primer cliente instalado con este manual: **La Azotea** (octubre 2026).
+Este repositorio (`Qr-cafes-nuevo`) es la **plantilla de RMS Cafés**: nació de la plantilla de
+restaurantes que se instaló en La Azotea (octubre 2026), con lo propio de cafés (comandas por mesa,
+seguimiento en vivo para el cliente, llamar al mesero / pedir la cuenta, avisos push, marca propia).
+En los comandos de abajo, `rms-restaurante` se reemplaza por `Qr-cafes-nuevo`.
+
+**Para una demostración de venta** (antes de tener cliente) se puede cargar el "Café Demo", con
+carta, mesas y personal de ejemplo:
+`SEED=demo npm run db:seed --workspace=server` (PIN dueño 1234, mesero 1111, cocina 2222,
+barra 3333, caja 4444).
 
 ---
 
@@ -71,7 +79,8 @@ DATABASE_URL=<base-temporal> npm run db:seed
 Verificar con `npx prisma migrate diff --from-url <base-temporal> --to-schema-datamodel
 prisma/schema.prisma` que la base migrada es idéntica al esquema (debe decir "empty
 migration"), y recorrer el sistema: entrar con el PIN de Administrador, crear estación,
-categoría, plato y mesa, pedir por QR, verlo en Cocina y Meseros, abrir Caja.
+categoría, plato y mesa, pedir por QR (con dos nombres distintos en la misma mesa), confirmarlo en Cocina, llevarlo desde
+el botón 🔔 del Mesero, pedir la cuenta desde el celular del cliente y cobrar en Caja.
 
 ## 4. Cuentas del cliente (Jimena hace los clics, Claude guía)
 
@@ -103,6 +112,7 @@ categoría, plato y mesa, pedir por QR, verlo en Cocina y Meseros, abrir Caja.
 | `LLM_PROVIDER` | `gemini` |
 | `GEMINI_API_KEY` | clave de Gemini (la misma de Jimena sirve; si un cliente usa mucho el asistente, darle una propia) |
 | `NODE_VERSION` | `20.18.0` |
+| `VAPID_CONTACT` | (opcional) `mailto:<correo de soporte>`. Lo piden Google/Apple para las notificaciones push. Las llaves VAPID se generan solas la primera vez y quedan guardadas en la base del cliente: **no borrar la tabla `AppSetting`**, o todos los celulares tendrían que volver a activar los avisos |
 
 **Netlify:** `VITE_API_URL` = URL del backend en Render (`https://rms-<cliente>.onrender.com`).
 Se lee **al compilar**: si se cambia, hay que volver a desplegar el sitio.
@@ -134,8 +144,14 @@ borrar ese pedido de prueba.
 
 - Entrar con el PIN del Administrador (`1234` en la instalación en blanco) y **cambiarlo** en
   Usuarios. Crear al personal con sus propios PIN.
-- Cuando el dueño ya haya creado sus mesas, generar e imprimir los QR:
+- Poner logo y colores del café en Admin → **Asistente y marca**.
+- Cuando el dueño ya haya creado sus mesas, imprimir los QR desde Admin → **Códigos QR**
+  (salen con el logo y colores del café). Cada QR lleva un código secreto de la mesa; si alguno
+  se filtra, "Cambiar código" invalida el viejo. Alternativa por consola:
   `node scripts/generate-table-qr.mjs https://<dominio>` (desde `server/`).
+- En cada celular del personal (cocina, barra, mesero, caja, dueño): abrir el sitio, entrar con
+  su PIN, **agregar a la pantalla de inicio** y tocar **"Activar avisos"**. En iPhone los avisos
+  con el celular bloqueado solo funcionan desde el ícono de la pantalla de inicio (iOS 16.4+).
 - Anotar el cliente en `docs/clientes-registro.md` (privado, no se sube a git).
 - Empieza el período de prueba de 14 días.
 

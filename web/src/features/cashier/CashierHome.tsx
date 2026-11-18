@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ServiceDock from "../floor/ServiceDock";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCOP, PERMISSIONS } from "@rms/shared";
@@ -91,6 +92,7 @@ export default function CashierHome() {
       </div>
 
       {showCloseModal && <CloseSessionModal session={session} onClose={() => setShowCloseModal(false)} />}
+      <ServiceDock mode="cashier" />
     </div>
   );
 }

@@ -11,6 +11,8 @@ import CustomersPage from "./CustomersPage";
 import TableManager from "./TableManager";
 import AssistantPage from "./AssistantPage";
 import ModifiersPage from "./ModifiersPage";
+import QrCodesPage from "./QrCodesPage";
+import ServiceDock from "../floor/ServiceDock";
 
 export default function AdminHome() {
   const user = useAuthStore((s) => s.user);
@@ -36,8 +38,9 @@ export default function AdminHome() {
     ...(canApprove ? [{ to: "aprobaciones", label: "Aprobaciones" }] : []),
     ...(canManageMenu ? [{ to: "menu", label: "Menú" }] : []),
     ...(canManageTables ? [{ to: "mesas", label: "Mesas" }] : []),
+    ...(canManageTables ? [{ to: "qr", label: "Códigos QR" }] : []),
     ...(canManageMenu ? [{ to: "extras", label: "Extras" }] : []),
-    ...(canManageMenu ? [{ to: "asistente", label: "Asistente IA" }] : []),
+    ...(canManageMenu ? [{ to: "asistente", label: "Asistente y marca" }] : []),
     ...(canManageUsers ? [{ to: "usuarios", label: "Usuarios" }] : []),
     ...(canManageCustomers ? [{ to: "clientes", label: "Clientes" }] : []),
   ];
@@ -139,12 +142,14 @@ export default function AdminHome() {
           <Route path="aprobaciones" element={canApprove ? <ApprovalQueue /> : <Navigate to=".." replace />} />
           <Route path="menu" element={canManageMenu ? <MenuManager /> : <Navigate to=".." replace />} />
           <Route path="mesas" element={canManageTables ? <TableManager /> : <Navigate to=".." replace />} />
+          <Route path="qr" element={canManageTables ? <QrCodesPage /> : <Navigate to=".." replace />} />
           <Route path="extras" element={canManageMenu ? <ModifiersPage /> : <Navigate to=".." replace />} />
           <Route path="asistente" element={canManageMenu ? <AssistantPage /> : <Navigate to=".." replace />} />
           <Route path="usuarios" element={canManageUsers ? <UserManager /> : <Navigate to=".." replace />} />
           <Route path="clientes" element={canManageCustomers ? <CustomersPage /> : <Navigate to=".." replace />} />
         </Routes>
       </main>
+      <ServiceDock mode="owner" />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import type { TicketStatus } from "@rms/shared";
 import { api } from "../../lib/api";
 
 export interface PublicModifier {
@@ -23,6 +24,7 @@ export interface PublicMenuItem {
   allergens: string[];
   price: number;
   course: string;
+  preparationTimeEstimateMin: number;
   modifierGroups: PublicModifierGroup[];
 }
 
@@ -33,9 +35,16 @@ export interface PublicMenuCategory {
   items: PublicMenuItem[];
 }
 
+export interface PublicBusiness {
+  name: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  accentColor: string;
+}
+
 export interface PublicMenuResponse {
   table: { id: string; label: string; capacity: number };
-  business: { name: string };
+  business: PublicBusiness;
   categories: PublicMenuCategory[];
 }
 
@@ -46,26 +55,75 @@ export interface SelfOrderCartItem {
   modifierIds?: string[];
 }
 
-export interface SelfOrderStatus {
+export interface PublicTicketItem {
+  id: string;
+  name: string;
+  quantity: number;
+  modifiers: string[];
+  notes: string | null;
+  dinerName: string | null;
+  mine: boolean;
+  cancelled: boolean;
+  cancelReason: string | null;
+  lineTotal: number;
+}
+
+export interface PublicTicket {
+  id: string;
+  number: number;
+  status: TicketStatus;
+  rejectReason: string | null;
+  queuePosition: number | null;
+  estimateMin: number;
+  sentAt: string;
+  seenAt: string | null;
+  confirmedAt: string | null;
+  startedAt: string | null;
+  readyAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  rejectedAt: string | null;
+  items: PublicTicketItem[];
+}
+
+export interface PublicTableStatus {
   tableLabel: string;
-  status: string;
-  items: { id: string; name: string; quantity: number; status: string }[];
+  tickets: PublicTicket[];
+  pendingRequests: { type: "WAITER" | "BILL"; createdAt: string }[];
+  bill: {
+    mine: number;
+    table: number;
+    discount: number;
+    byDiner: { name: string; amount: number }[];
+  } | null;
 }
 
-export async function fetchPublicMenu(tableLabel: string): Promise<PublicMenuResponse> {
-  const { data } = await api.get(`/api/public/mesa/${encodeURIComponent(tableLabel)}/menu`);
+export interface Diner {
+  dinerId: string;
+  dinerName: string;
+}
+
+const base = (token: string) => `/api/public/m/${encodeURIComponent(token)}`;
+
+export async function fetchPublicMenu(token: string): Promise<PublicMenuResponse> {
+  const { data } = await api.get(`${base(token)}/menu`);
   return data;
 }
 
-export async function placeSelfOrder(
-  tableLabel: string,
-  items: SelfOrderCartItem[]
-): Promise<{ id: string }> {
-  const { data } = await api.post(`/api/public/mesa/${encodeURIComponent(tableLabel)}/pedido`, { items });
+export async function placeSelfOrder(token: string, diner: Diner, items: SelfOrderCartItem[]): Promise<{ id: string }> {
+  const { data } = await api.post(`${base(token)}/pedido`, { ...diner, items });
   return data;
 }
 
-export async function fetchSelfOrderStatus(orderId: string): Promise<SelfOrderStatus> {
-  const { data } = await api.get(`/api/public/pedido/${orderId}/estado`);
+export async function fetchTableStatus(token: string, dinerId: string): Promise<PublicTableStatus> {
+  const { data } = await api.get(`${base(token)}/estado`, { params: { dinerId } });
   return data;
+}
+
+export async function requestService(
+  token: string,
+  diner: Diner,
+  params: { type: "WAITER" | "BILL"; billScope?: "ALL" | "MINE"; paymentHint?: "CASH" | "CARD" | "TRANSFER" }
+) {
+  await api.post(`${base(token)}/llamado`, { ...diner, ...params });
 }

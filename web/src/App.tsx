@@ -8,6 +8,7 @@ import KdsHome from "./features/kds/KdsHome";
 import AdminHome from "./features/admin/AdminHome";
 import CashierHome from "./features/cashier/CashierHome";
 import SelfOrderScreen from "./features/self-order/SelfOrderScreen";
+import PushPrompt from "./features/auth/PushPrompt";
 
 // Roles rarely have a single clean permission (e.g. ADMIN holds every permission,
 // including ORDERS_CREATE), so route by role identity rather than sniffing permissions.
@@ -28,8 +29,11 @@ export default function App() {
   const user = useAuthStore((s) => s.user);
 
   return (
+    <>
+    <PushPrompt />
     <Routes>
-      <Route path="/pedir/:tableLabel" element={<SelfOrderScreen />} />
+      {/* El QR de cada mesa apunta aqui con el codigo secreto de la mesa. */}
+      <Route path="/m/:token" element={<SelfOrderScreen />} />
       <Route
         path="/"
         element={user ? <Navigate to={landingRouteFor(user.roleName)} replace /> : <PinLoginScreen />}
@@ -70,5 +74,6 @@ export default function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

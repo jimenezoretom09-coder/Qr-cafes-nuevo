@@ -19,10 +19,15 @@ export default function WaiterNotifications() {
     armarSonido();
   }, []);
 
-  useSocketEvent("order:item_status_changed", (payload) => {
-    if (payload.status !== "READY") return;
-    const id = `${payload.itemId}-${Date.now()}`;
-    setToasts((prev) => [...prev, { id, tableLabel: payload.tableLabel, itemName: payload.itemName }]);
+  // Un aviso por mesa completa (la comanda), no uno por plato.
+  useSocketEvent("ticket:updated", (ticket) => {
+    if (ticket.status !== "READY") return;
+    const id = `${ticket.id}-${Date.now()}`;
+    const itemName = ticket.items
+      .filter((i) => i.status !== "CANCELLED")
+      .map((i) => `${i.quantity}× ${i.name}`)
+      .join(", ");
+    setToasts((prev) => [...prev, { id, tableLabel: ticket.tableLabel, itemName }]);
     playAlerta(2, 660);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -35,7 +40,7 @@ export default function WaiterNotifications() {
     <div className="fixed right-4 top-4 z-50 flex w-80 flex-col gap-2">
       {toasts.map((t) => (
         <div key={t.id} className="rounded-xl border-2 border-emerald-300 bg-emerald-600 px-5 py-3 text-white shadow-2xl">
-          <p className="text-lg font-bold">🔔 Mesa {t.tableLabel} — ¡listo!</p>
+          <p className="text-lg font-bold">🔔 Mesa {t.tableLabel} — ¡listo para llevar!</p>
           <p className="text-sm text-emerald-50">{t.itemName}</p>
         </div>
       ))}

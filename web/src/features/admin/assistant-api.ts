@@ -10,6 +10,9 @@ export interface RestaurantProfileDTO {
   policies: string | null;
   timezone: string;
   currency: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  accentColor: string;
 }
 
 export interface RestaurantHourDTO {

@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { formatCOP, getDefaultMealPeriod, hasMealSplit, pickMealPeriod, type MealPeriod } from "@rms/shared";
+import { getErrorMessage } from "../../lib/api";
 import {
   fetchPublicMenu,
-  fetchSelfOrderStatus,
+  fetchTableStatus,
   placeSelfOrder,
+  requestService,
   type PublicMenuItem,
   type PublicMenuResponse,
-  type SelfOrderStatus,
+  type PublicTableStatus,
 } from "./api";
 import SelfModifierPicker, { type SelfModifierSelection } from "./SelfModifierPicker";
 import AssistantWidget from "./AssistantWidget";
 import DishMedia from "./DishMedia";
+import NamePrompt from "./NamePrompt";
+import TicketTracker from "./TicketTracker";
+import BillSheet from "./BillSheet";
+import { applyBrand, getDinerId, getSavedDinerName, saveDinerName } from "./brand";
 
-interface CartLine {
+export interface CartLine {
   key: string;
   menuItemId: string;
   name: string;
@@ -30,22 +36,23 @@ const MEAL_PERIOD_LABELS: Record<Exclude<MealPeriod, "ALL">, string> = {
   LUNCH: "Almuerzo",
 };
 
-const ITEM_STATUS_LABEL: Record<string, string> = {
-  QUEUED: "En cola",
-  IN_PREPARATION: "Preparando",
-  READY: "¡Listo!",
-  SERVED: "Servido",
-};
+function cartStorageKey(token: string) {
+  return `rms-cart-${token}`;
+}
 
-const ITEM_STATUS_STYLE: Record<string, string> = {
-  QUEUED: "bg-epi-ink-variant text-white",
-  IN_PREPARATION: "bg-epi-gold text-white",
-  READY: "bg-emerald-600 text-white animate-pulse",
-  SERVED: "bg-epi-outline-variant text-epi-ink",
-};
+function PulseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
-function orderStorageKey(tableLabel: string) {
-  return `self-order-${tableLabel}`;
+interface Toast {
+  id: number;
+  text: string;
+  tone: "ok" | "bad" | "info";
 }
 
 function BagIcon() {
@@ -88,58 +95,112 @@ function TicketIcon() {
 }
 
 export default function SelfOrderScreen() {
-  const { tableLabel = "" } = useParams();
+  const { token = "" } = useParams();
   const [menu, setMenu] = useState<PublicMenuResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mealPeriod, setMealPeriod] = useState<Exclude<MealPeriod, "ALL">>(getDefaultMealPeriod());
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [screen, setScreen] = useState<"menu" | "search">("menu");
   const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [cart, setCart] = useState<CartLine[]>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(cartStorageKey(token)) ?? "[]");
+    } catch {
+      return [];
+    }
+  });
   const [pendingItem, setPendingItem] = useState<PublicMenuItem | null>(null);
-  const [view, setView] = useState<"ordering" | "review" | "confirmed">("ordering");
+  const [view, setView] = useState<"ordering" | "review" | "status">("ordering");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [orderStatus, setOrderStatus] = useState<SelfOrderStatus | null>(null);
+  const [tableStatus, setTableStatus] = useState<PublicTableStatus | null>(null);
+  const [dinerName, setDinerName] = useState<string | null>(getSavedDinerName());
+  const [editingName, setEditingName] = useState(false);
+  const [billSheetOpen, setBillSheetOpen] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const dinerId = useRef(getDinerId()).current;
+  const lastSeenStatus = useRef<Map<string, string>>(new Map());
+
+  const showToast = useCallback((text: string, tone: Toast["tone"] = "info") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, text, tone }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 6000);
+  }, []);
+
+  const loadMenu = useCallback(() => {
+    return fetchPublicMenu(token).then((data) => {
+      setMenu(data);
+      applyBrand(data.business);
+      return data;
+    });
+  }, [token]);
 
   useEffect(() => {
-    fetchPublicMenu(tableLabel)
+    loadMenu()
       .then((data) => {
-        setMenu(data);
         const period = pickMealPeriod(data.categories);
         setMealPeriod(period);
         const firstMatch = data.categories.find((c) => c.mealPeriod === period || c.mealPeriod === "ALL");
         setActiveCategoryId(firstMatch?.id ?? data.categories[0]?.id ?? null);
       })
-      .catch(() => setLoadError("No pudimos encontrar esta mesa. Pide ayuda a un mesero."));
-
-    const savedOrderId = localStorage.getItem(orderStorageKey(tableLabel));
-    if (savedOrderId) {
-      setOrderId(savedOrderId);
-      setView("confirmed");
-    }
-  }, [tableLabel]);
+      .catch(() => setLoadError("Este código QR no es válido. Pide ayuda a un mesero."));
+  }, [loadMenu]);
 
   useEffect(() => {
-    if (view !== "confirmed" || !orderId) return;
-    let cancelled = false;
-
-    async function poll() {
-      try {
-        const status = await fetchSelfOrderStatus(orderId!);
-        if (!cancelled) setOrderStatus(status);
-      } catch {
-        /* transient network hiccup — next poll will retry */
-      }
+    try {
+      sessionStorage.setItem(cartStorageKey(token), JSON.stringify(cart));
+    } catch {
+      /* sin almacenamiento: el carrito vive solo en memoria */
     }
-    poll();
-    const interval = setInterval(poll, 6000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [view, orderId]);
+  }, [cart, token]);
+
+  // Avisa (vibra + mensaje) cuando lo de este comensal cambia a algo que le importa.
+  const notifyChanges = useCallback(
+    (status: PublicTableStatus) => {
+      const seen = lastSeenStatus.current;
+      const firstLoad = seen.size === 0;
+      for (const t of status.tickets) {
+        const prev = seen.get(t.id);
+        seen.set(t.id, t.status);
+        if (firstLoad || prev === t.status || !t.items.some((i) => i.mine)) continue;
+        const messages: Partial<Record<string, [string, Toast["tone"]]>> = {
+          SEEN: [`Cocina ya vio tu pedido #${t.number} 👀`, "info"],
+          CONFIRMED: [`Pedido #${t.number} confirmado ✅`, "info"],
+          PREPARING: [`Están preparando tu pedido #${t.number} 👨‍🍳`, "info"],
+          READY: [`¡Tu pedido #${t.number} está listo! 🎉`, "ok"],
+          ON_THE_WAY: [`Tu pedido #${t.number} va camino a tu mesa 🚶`, "ok"],
+          REJECTED: [`Tu pedido #${t.number} no se pudo preparar`, "bad"],
+        };
+        const msg = messages[t.status];
+        if (msg) {
+          showToast(msg[0], msg[1]);
+          if (t.status === "READY" || t.status === "ON_THE_WAY" || t.status === "REJECTED") {
+            navigator.vibrate?.([200, 100, 200]);
+          }
+        }
+      }
+    },
+    [showToast]
+  );
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const status = await fetchTableStatus(token, dinerId);
+      setTableStatus(status);
+      notifyChanges(status);
+    } catch {
+      /* corte de senal momentaneo: el siguiente intento lo recupera */
+    }
+  }, [token, dinerId, notifyChanges]);
+
+  // Mas seguido mientras mira el seguimiento; lento en la carta (solo para avisarle cambios).
+  useEffect(() => {
+    if (!menu) return;
+    refreshStatus();
+    const interval = setInterval(refreshStatus, view === "status" ? 4000 : 10000);
+    return () => clearInterval(interval);
+  }, [menu, view, refreshStatus]);
 
   const visibleCategories = useMemo(
     () => (menu?.categories ?? []).filter((c) => c.mealPeriod === mealPeriod || c.mealPeriod === "ALL"),
@@ -239,6 +300,10 @@ export default function SelfOrderScreen() {
   }
 
   async function confirmOrder() {
+    if (!dinerName) {
+      setEditingName(true);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -248,24 +313,67 @@ export default function SelfOrderScreen() {
         notes: line.notes,
         modifierIds: line.modifierIds,
       }));
-      const order = await placeSelfOrder(tableLabel, items);
-      localStorage.setItem(orderStorageKey(tableLabel), order.id);
-      setOrderId(order.id);
+      await placeSelfOrder(token, { dinerId, dinerName }, items);
       setCart([]);
-      setView("confirmed");
-    } catch {
-      setSubmitError("No pudimos enviar tu pedido. Intenta de nuevo o avísale a un mesero.");
+      setView("status");
+      showToast("¡Pedido enviado a cocina! 🙌", "ok");
+      refreshStatus();
+    } catch (err) {
+      // Lo mas comun: algo se agoto mientras el comensal miraba la carta.
+      setSubmitError(getErrorMessage(err, "No pudimos enviar tu pedido. Intenta de nuevo o avísale a un mesero."));
+      loadMenu().catch(() => undefined);
     } finally {
       setSubmitting(false);
     }
   }
 
   function orderMore() {
-    localStorage.removeItem(orderStorageKey(tableLabel));
-    setOrderId(null);
-    setOrderStatus(null);
     setView("ordering");
+    setScreen("menu");
   }
+
+  function addCartLines(lines: Omit<CartLine, "key">[]) {
+    setCart((prev) => [...prev, ...lines.map((l, i) => ({ ...l, key: `${l.menuItemId}-${Date.now()}-${i}` }))]);
+  }
+
+  async function callWaiter() {
+    if (!dinerName) return setEditingName(true);
+    setSendingRequest(true);
+    try {
+      await requestService(token, { dinerId, dinerName }, { type: "WAITER" });
+      showToast("Listo, el mesero ya viene 🙋", "ok");
+      refreshStatus();
+    } catch {
+      showToast("No pudimos avisar al mesero. Intenta de nuevo.", "bad");
+    } finally {
+      setSendingRequest(false);
+    }
+  }
+
+  async function requestBill(billScope: "ALL" | "MINE", paymentHint: "CASH" | "CARD" | "TRANSFER") {
+    if (!dinerName) return setEditingName(true);
+    setSendingRequest(true);
+    try {
+      await requestService(token, { dinerId, dinerName }, { type: "BILL", billScope, paymentHint });
+      setBillSheetOpen(false);
+      showToast("Listo, ya te llevan la cuenta 🧾", "ok");
+      refreshStatus();
+    } catch {
+      showToast("No pudimos pedir la cuenta. Intenta de nuevo.", "bad");
+    } finally {
+      setSendingRequest(false);
+    }
+  }
+
+  function chooseName(name: string) {
+    saveDinerName(name);
+    setDinerName(name);
+    setEditingName(false);
+  }
+
+  const waiterPending = tableStatus?.pendingRequests.some((r) => r.type === "WAITER") ?? false;
+  const billPending = tableStatus?.pendingRequests.some((r) => r.type === "BILL") ?? false;
+  const activeTickets = (tableStatus?.tickets ?? []).filter((t) => t.status !== "DELIVERED" && t.status !== "REJECTED");
 
   if (loadError) {
     return (
@@ -370,12 +478,20 @@ export default function SelfOrderScreen() {
 
   return (
     <div className="flex h-screen flex-col bg-epi-bg font-body text-epi-ink">
-      <header className="sticky top-0 z-20 border-b border-epi-outline-variant/50 bg-epi-bg/95 px-4 pb-3 pt-4 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-epi-outline-variant/50 bg-epi-bg/95 px-4 pb-3 pt-3 backdrop-blur">
         <div className="flex items-center justify-between gap-2">
-          <span className="w-9 shrink-0 text-xs font-semibold text-epi-ink-variant">{menu.table.label}</span>
-          <h1 className="flex-1 truncate text-center font-display text-lg font-bold uppercase tracking-wide">
-            {menu.business.name}
-          </h1>
+          <div className="flex min-w-0 items-center gap-2">
+            {menu.business.logoUrl && (
+              <img src={menu.business.logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-lg font-bold leading-tight">{menu.business.name}</h1>
+              <button onClick={() => setEditingName(true)} className="truncate text-xs text-epi-ink-variant">
+                Mesa {menu.table.label}
+                {dinerName ? ` · ${dinerName} ✎` : ""}
+              </button>
+            </div>
+          </div>
           <button
             onClick={() => cartCount > 0 && setView("review")}
             aria-label="Ver pedido"
@@ -387,6 +503,25 @@ export default function SelfOrderScreen() {
                 {cartCount}
               </span>
             )}
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={callWaiter}
+            disabled={sendingRequest}
+            className={`flex-1 rounded-full border py-2 text-xs font-semibold transition active:scale-[0.98] ${
+              waiterPending ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-epi-outline-variant text-epi-ink"
+            }`}
+          >
+            {waiterPending ? "✓ Mesero avisado" : "🙋 Llamar al mesero"}
+          </button>
+          <button
+            onClick={() => setBillSheetOpen(true)}
+            className={`flex-1 rounded-full border py-2 text-xs font-semibold transition active:scale-[0.98] ${
+              billPending ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-epi-outline-variant text-epi-ink"
+            }`}
+          >
+            {billPending ? "✓ Cuenta pedida" : "🧾 Pedir la cuenta"}
           </button>
         </div>
       </header>
@@ -502,56 +637,32 @@ export default function SelfOrderScreen() {
           </div>
         )}
 
-        {view === "confirmed" && (
-          <div>
-            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 font-body text-sm text-emerald-900">
-              ¡Pedido enviado a cocina! Te avisamos aquí mismo cuando esté listo.
-            </div>
-            <div className="space-y-2">
-              {(orderStatus?.items ?? []).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-epi-outline-variant/50 bg-epi-surface p-3"
-                >
-                  <p className="font-body font-semibold text-epi-ink">
-                    {item.quantity}× {item.name}
-                  </p>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      ITEM_STATUS_STYLE[item.status] ?? "bg-epi-surface-low text-epi-ink"
-                    }`}
-                  >
-                    {ITEM_STATUS_LABEL[item.status] ?? item.status}
-                  </span>
-                </div>
-              ))}
-              {!orderStatus && <p className="text-sm text-epi-ink-variant">Cargando estado del pedido…</p>}
-            </div>
-            <button
-              onClick={orderMore}
-              className="mt-4 w-full rounded bg-epi-ink py-3 font-body text-sm font-semibold uppercase tracking-wide text-white"
-            >
-              Pedir algo más
-            </button>
-          </div>
+        {view === "status" && (
+          <TicketTracker status={tableStatus} onRequestBill={() => setBillSheetOpen(true)} onOrderMore={orderMore} />
         )}
       </div>
 
-      {view === "ordering" && (
-        <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-epi-outline-variant/50 bg-epi-surface">
+      {view !== "review" && (
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-epi-outline-variant/50 bg-epi-surface pb-[env(safe-area-inset-bottom)]">
           <button
-            onClick={() => setScreen("menu")}
+            onClick={() => {
+              setView("ordering");
+              setScreen("menu");
+            }}
             className={`flex flex-1 flex-col items-center gap-1 py-2.5 font-body text-[11px] font-semibold ${
-              screen === "menu" ? "text-epi-ink" : "text-epi-ink-variant"
+              view === "ordering" && screen === "menu" ? "text-epi-ink" : "text-epi-ink-variant"
             }`}
           >
             <BookIcon />
             Menú
           </button>
           <button
-            onClick={() => setScreen("search")}
+            onClick={() => {
+              setView("ordering");
+              setScreen("search");
+            }}
             className={`flex flex-1 flex-col items-center gap-1 py-2.5 font-body text-[11px] font-semibold ${
-              screen === "search" ? "text-epi-ink" : "text-epi-ink-variant"
+              view === "ordering" && screen === "search" ? "text-epi-ink" : "text-epi-ink-variant"
             }`}
           >
             <SearchIcon />
@@ -567,6 +678,18 @@ export default function SelfOrderScreen() {
               <span className="absolute right-[28%] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-epi-gold text-[10px] font-bold text-white">
                 {cartCount}
               </span>
+            )}
+          </button>
+          <button
+            onClick={() => setView("status")}
+            className={`relative flex flex-1 flex-col items-center gap-1 py-2.5 font-body text-[11px] font-semibold ${
+              view === "status" ? "text-epi-ink" : "text-epi-ink-variant"
+            }`}
+          >
+            <PulseIcon />
+            Seguimiento
+            {activeTickets.length > 0 && (
+              <span className="absolute right-[28%] top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
             )}
           </button>
         </nav>
@@ -598,7 +721,44 @@ export default function SelfOrderScreen() {
         />
       )}
 
-      {!pendingItem && <AssistantWidget />}
+      {!pendingItem && (
+        <AssistantWidget
+          tableToken={token}
+          dinerName={dinerName}
+          onCartAdditions={(lines) => {
+            addCartLines(lines);
+            showToast(`Agregado a tu pedido: ${lines.map((l) => `${l.quantity}× ${l.name}`).join(", ")}`, "ok");
+          }}
+          onOpenCart={() => setView("review")}
+        />
+      )}
+
+      {billSheetOpen && (
+        <BillSheet sending={sendingRequest} onCancel={() => setBillSheetOpen(false)} onSend={requestBill} />
+      )}
+
+      {(dinerName === null || editingName) && (
+        <NamePrompt
+          businessName={menu.business.name}
+          tableLabel={menu.table.label}
+          logoUrl={menu.business.logoUrl}
+          initialName={dinerName && dinerName !== "Invitado" ? dinerName : ""}
+          onDone={chooseName}
+        />
+      )}
+
+      <div className="pointer-events-none fixed inset-x-4 top-28 z-[60] flex flex-col items-center gap-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`animate-pop pointer-events-auto max-w-sm rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-xl ${
+              t.tone === "ok" ? "bg-emerald-600 text-white" : t.tone === "bad" ? "bg-red-600 text-white" : "bg-epi-ink text-white"
+            }`}
+          >
+            {t.text}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

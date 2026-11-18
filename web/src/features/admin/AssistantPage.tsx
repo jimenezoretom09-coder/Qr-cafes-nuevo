@@ -35,6 +35,9 @@ export default function AssistantPage() {
     address: "",
     phone: "",
     policies: "",
+    logoUrl: "",
+    primaryColor: "#1b1c1c",
+    accentColor: "#775a19",
   });
   useEffect(() => {
     if (profile) {
@@ -45,12 +48,15 @@ export default function AssistantPage() {
         address: profile.address ?? "",
         phone: profile.phone ?? "",
         policies: profile.policies ?? "",
+        logoUrl: profile.logoUrl ?? "",
+        primaryColor: profile.primaryColor,
+        accentColor: profile.accentColor,
       });
     }
   }, [profile]);
 
   const profileMutation = useMutation({
-    mutationFn: () => updateAssistantProfile(profileForm),
+    mutationFn: () => updateAssistantProfile({ ...profileForm, logoUrl: profileForm.logoUrl.trim() || null }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant-profile"] }),
   });
 
@@ -171,13 +177,50 @@ export default function AssistantPage() {
       )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 font-bold text-slate-800">Perfil del restaurante</h2>
+        <h2 className="mb-3 font-bold text-slate-800">Perfil y marca del café</h2>
         <p className="mb-3 text-xs text-slate-500">
-          Esta información es la que el asistente usa para responder preguntas sobre el negocio.
+          El nombre, el logo y los colores son los que ven los clientes en la carta y en los QR. El resto lo usa el
+          asistente para responder preguntas sobre el negocio.
         </p>
+        <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-3">
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-3">
+            Logo (dirección de la imagen, ej. /medios/logo.png)
+            <input
+              placeholder="https://… o /medios/logo.png"
+              value={profileForm.logoUrl}
+              onChange={(e) => setProfileForm({ ...profileForm, logoUrl: e.target.value })}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <input
+              type="color"
+              value={profileForm.primaryColor}
+              onChange={(e) => setProfileForm({ ...profileForm, primaryColor: e.target.value })}
+              className="h-9 w-12 rounded border border-slate-300"
+            />
+            Color principal (oscuro: botones y textos)
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <input
+              type="color"
+              value={profileForm.accentColor}
+              onChange={(e) => setProfileForm({ ...profileForm, accentColor: e.target.value })}
+              className="h-9 w-12 rounded border border-slate-300"
+            />
+            Color de acento (precios y detalles)
+          </label>
+          <div className="flex items-center gap-2">
+            {profileForm.logoUrl && <img src={profileForm.logoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />}
+            <span className="rounded px-3 py-2 text-xs font-bold text-white" style={{ backgroundColor: profileForm.primaryColor }}>
+              Agregar al pedido
+            </span>
+            <span className="text-sm font-bold" style={{ color: profileForm.accentColor }}>$8.500</span>
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input
-            placeholder="Nombre del restaurante"
+            placeholder="Nombre del café"
             value={profileForm.name}
             onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
             className="rounded border border-slate-300 px-3 py-2 text-sm"
@@ -195,7 +238,7 @@ export default function AssistantPage() {
             className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
           />
           <textarea
-            placeholder="Descripción breve del restaurante"
+            placeholder="Descripción breve del café"
             value={profileForm.description}
             onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })}
             className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"

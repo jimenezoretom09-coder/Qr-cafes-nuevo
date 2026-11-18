@@ -7,6 +7,9 @@ import { handleChatMessage } from "./service.js";
 const chatSchema = z.object({
   visitorId: z.string().min(1),
   message: z.string().min(1).max(2000),
+  // Desde la mesa: el chat puede agregar al pedido, ver el estado y llamar al mesero.
+  tableToken: z.string().max(64).optional(),
+  dinerName: z.string().max(40).optional(),
 });
 
 const profileSchema = z.object({
@@ -16,6 +19,9 @@ const profileSchema = z.object({
   address: z.string().optional(),
   phone: z.string().optional(),
   policies: z.string().optional(),
+  logoUrl: z.string().max(500).nullable().optional(),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
 const hourSchema = z.object({
@@ -42,8 +48,12 @@ export default async function assistantPublicRoutes(fastify: FastifyInstance) {
       if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
       try {
-        const replyText = await handleChatMessage(fastify.prisma, parsed.data.visitorId, parsed.data.message);
-        return { reply: replyText };
+        return await handleChatMessage(fastify.prisma, fastify.io, {
+          visitorId: parsed.data.visitorId,
+          userMessage: parsed.data.message,
+          tableToken: parsed.data.tableToken,
+          dinerName: parsed.data.dinerName,
+        });
       } catch (err) {
         request.log.error(err);
         return reply.code(500).send({ error: "No se pudo procesar el mensaje en este momento." });

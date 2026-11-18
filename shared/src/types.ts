@@ -76,6 +76,8 @@ export interface TableDTO {
   posY: number;
   status: TableStatus;
   activeOrderId: string | null;
+  /** Codigo secreto del QR de la mesa (/m/<publicToken>). */
+  publicToken: string;
 }
 
 export interface OrderItemModifierDTO {
@@ -103,6 +105,102 @@ export interface OrderItemDTO {
   readyAt: string | null;
   servedAt: string | null;
   paidAt: string | null;
+  ticketId: string | null;
+  /** Comensal que lo pidio desde su celular (null si lo tomo el mesero). */
+  dinerName: string | null;
+  /** "Agotado" o el motivo que escribio cocina al rechazarlo. */
+  cancelReason: string | null;
+}
+
+/**
+ * Estados de una comanda, en el orden en que los ve el comensal:
+ * Enviado -> Recibido (cocina lo vio en pantalla) -> Confirmado -> Preparando -> Listo ->
+ * En camino a tu mesa -> Entregado. REJECTED: cocina no lo puede preparar.
+ */
+export type TicketStatus =
+  | "SENT"
+  | "SEEN"
+  | "CONFIRMED"
+  | "PREPARING"
+  | "READY"
+  | "ON_THE_WAY"
+  | "DELIVERED"
+  | "REJECTED";
+
+export const TICKET_STATUS_FLOW: TicketStatus[] = [
+  "SENT",
+  "SEEN",
+  "CONFIRMED",
+  "PREPARING",
+  "READY",
+  "ON_THE_WAY",
+  "DELIVERED",
+];
+
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  SENT: "Enviado",
+  SEEN: "Recibido por cocina",
+  CONFIRMED: "Confirmado",
+  PREPARING: "Preparando",
+  READY: "¡Listo!",
+  ON_THE_WAY: "En camino a tu mesa",
+  DELIVERED: "Entregado",
+  REJECTED: "No disponible",
+};
+
+/** Acciones que mueven una comanda de un estado al siguiente. */
+export type TicketAction = "confirm" | "start" | "ready" | "pickup" | "deliver" | "reject";
+
+export interface TicketItemDTO {
+  id: string;
+  name: string;
+  quantity: number;
+  stationId: string;
+  course: Course;
+  status: OrderItemStatus;
+  notes: string | null;
+  modifiers: string[];
+  dinerName: string | null;
+  cancelReason: string | null;
+}
+
+export interface TicketDTO {
+  id: string;
+  number: number;
+  orderId: string;
+  tableId: string;
+  tableLabel: string;
+  waiterName: string;
+  status: TicketStatus;
+  rejectReason: string | null;
+  /** Lugar en la fila de cocina (1 = es el siguiente). null si ya salio de cocina. */
+  queuePosition: number | null;
+  /** Minutos estimados: el plato mas demorado de la comanda. */
+  estimateMin: number;
+  items: TicketItemDTO[];
+  sentAt: string;
+  seenAt: string | null;
+  confirmedAt: string | null;
+  startedAt: string | null;
+  readyAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  rejectedAt: string | null;
+}
+
+export type ServiceRequestType = "WAITER" | "BILL";
+
+export interface ServiceRequestDTO {
+  id: string;
+  tableId: string;
+  tableLabel: string;
+  type: ServiceRequestType;
+  billScope: "ALL" | "MINE" | null;
+  paymentHint: "CASH" | "CARD" | "TRANSFER" | null;
+  dinerName: string | null;
+  status: "PENDING" | "ATTENDED";
+  createdAt: string;
+  attendedAt: string | null;
 }
 
 export interface OrderTotalsDTO {

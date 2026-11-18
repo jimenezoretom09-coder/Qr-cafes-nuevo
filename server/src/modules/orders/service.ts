@@ -15,7 +15,8 @@ import {
 } from "@rms/shared";
 import { recordAudit } from "../audit/service.js";
 import { clearAlert } from "./delay-tracker.js";
-import { getSelfServiceUserId } from "../self-order/self-service-user.js";
+import { deriveOrderStatus } from "./status.js";
+import { attachItemsToTicket, publishTicket, syncTicketFromItems } from "../tickets/service.js";
 
 const orderItemInclude = { modifiers: true } as const;
 const orderInclude = {
@@ -61,6 +62,9 @@ export function toOrderItemDTO(item: OrderItemRow): OrderItemDTO {
     readyAt: item.readyAt?.toISOString() ?? null,
     servedAt: item.servedAt?.toISOString() ?? null,
     paidAt: item.paidAt?.toISOString() ?? null,
+    ticketId: item.ticketId,
+    dinerName: item.dinerName,
+    cancelReason: item.cancelReason,
   };
 }
 
@@ -97,22 +101,17 @@ export function toOrderDTO(order: OrderWithItems): OrderDTO {
   };
 }
 
-function deriveOrderStatus(items: { status: string }[]): string {
-  const statuses = items.map((i) => i.status);
-  if (statuses.every((s) => s === "CANCELLED")) return "CANCELLED";
-  const active = statuses.filter((s) => s !== "CANCELLED");
-  if (active.length === 0) return "CANCELLED";
-  if (active.every((s) => s === "SERVED")) return "SERVED";
-  if (active.every((s) => s === "READY" || s === "SERVED")) return "READY";
-  if (active.some((s) => s === "IN_PREPARATION" || s === "READY" || s === "SERVED")) return "IN_PROGRESS";
-  return "OPEN";
-}
-
 export interface NewOrderItemInput {
   menuItemId: string;
   quantity: number;
   notes?: string;
   modifierIds: string[];
+}
+
+/** Quien de la mesa pidio (solo pedidos desde el QR). */
+export interface DinerInfo {
+  dinerId: string;
+  dinerName: string;
 }
 
 /**
@@ -184,6 +183,9 @@ export async function recalcIncludedDrinks(prisma: PrismaClient, orderId: string
             stationId: bebida.stationId,
             status: bebida.status,
             notes: bebida.notes,
+            ticketId: bebida.ticketId,
+            dinerId: bebida.dinerId,
+            dinerName: bebida.dinerName,
             isIncluded: false,
             sentToKitchenAt: bebida.sentToKitchenAt,
             startedAt: bebida.startedAt,
@@ -206,7 +208,7 @@ export async function recalcIncludedDrinks(prisma: PrismaClient, orderId: string
 export async function createOrGrowOrder(
   prisma: PrismaClient,
   io: SocketIOServer,
-  params: { tableId: string; waiterId: string; items: NewOrderItemInput[] }
+  params: { tableId: string; waiterId: string; items: NewOrderItemInput[]; diner?: DinerInfo }
 ) {
   const menuItems = await prisma.menuItem.findMany({
     where: { id: { in: params.items.map((i) => i.menuItemId) } },
@@ -247,6 +249,8 @@ export async function createOrGrowOrder(
         stationId: menuItem.stationId,
         status: "QUEUED",
         notes: input.notes,
+        dinerId: params.diner?.dinerId,
+        dinerName: params.diner?.dinerName,
         modifiers: {
           create: chosenModifiers.map((m) => ({
             modifierId: m.id,
@@ -260,6 +264,8 @@ export async function createOrGrowOrder(
   }
 
   await prisma.order.update({ where: { id: order.id }, data: { status: "IN_PROGRESS" } });
+  // Antes de repartir sobremesas: las filas que se partan ahi deben heredar ya su comanda.
+  const { ticketId, isNew } = await attachItemsToTicket(prisma, order.id, createdItemIds);
   await recalcIncludedDrinks(prisma, order.id);
   await recordAudit(prisma, {
     userId: params.waiterId,
@@ -280,6 +286,7 @@ export async function createOrGrowOrder(
       item: toOrderItemDTO(item),
     });
   }
+  await publishTicket(prisma, io, ticketId, isNew ? "new" : "grown");
 
   return toOrderDTO(fullOrder);
 }
@@ -295,7 +302,7 @@ const NEXT_STATUS: Record<OrderItemStatus, OrderItemStatus[]> = {
 export async function updateOrderItemStatus(
   prisma: PrismaClient,
   io: SocketIOServer,
-  params: { orderItemId: string; nextStatus: OrderItemStatus; actingUserId: string }
+  params: { orderItemId: string; nextStatus: OrderItemStatus; actingUserId: string; cancelReason?: string }
 ) {
   const item = await prisma.orderItem.findUniqueOrThrow({
     where: { id: params.orderItemId },
@@ -321,6 +328,7 @@ export async function updateOrderItemStatus(
     data: {
       status: params.nextStatus,
       ...(timestampField ? { [timestampField]: new Date() } : {}),
+      ...(params.nextStatus === "CANCELLED" ? { cancelReason: params.cancelReason ?? "Anulado" } : {}),
     },
   });
   clearAlert(item.id);
@@ -361,13 +369,8 @@ export async function updateOrderItemStatus(
   io.to(rooms.waiter(item.order.waiterId)).emit("order:item_status_changed", statusChangedPayload);
   io.to(rooms.station(item.stationId)).emit("order:item_status_changed", statusChangedPayload);
 
-  // Self-service orders (diner ordered via the table QR, no waiter assigned) have nobody
-  // listening on rooms.waiter(...) above — broadcast to every on-shift waiter instead so
-  // someone actually walks the food over once it's ready.
-  const selfServiceUserId = await getSelfServiceUserId(prisma);
-  if (item.order.waiterId === selfServiceUserId && params.nextStatus === "READY") {
-    io.to(rooms.role("WAITER")).emit("order:item_status_changed", statusChangedPayload);
-  }
+  // La comanda de este plato puede cambiar de estado con el (todo listo, todo cancelado...).
+  if (item.ticketId) await syncTicketFromItems(prisma, io, item.ticketId);
 
   return { ok: true };
 }
@@ -565,6 +568,9 @@ async function splitItemsForPartialPayment(
           stationId: item.stationId,
           status: item.status,
           notes: item.notes,
+          ticketId: item.ticketId,
+          dinerId: item.dinerId,
+          dinerName: item.dinerName,
           sentToKitchenAt: item.sentToKitchenAt,
           startedAt: item.startedAt,
           readyAt: item.readyAt,
@@ -710,6 +716,11 @@ export async function recordPayment(prisma: PrismaClient, io: SocketIOServer, in
     }
     await prisma.order.update({ where: { id: order.id }, data: { status: "CLOSED", closedAt: new Date() } });
     await prisma.restaurantTable.update({ where: { id: order.tableId }, data: { status: "FREE" } });
+    // Cuenta pagada: los llamados que quedaran pendientes en esa mesa ya no aplican.
+    await prisma.serviceRequest.updateMany({
+      where: { tableId: order.tableId, status: "PENDING" },
+      data: { status: "ATTENDED", attendedAt: new Date(), attendedById: input.createdById },
+    });
     closed = true;
     refreshedOrder = await loadOrder(prisma, order.id);
 

@@ -24,6 +24,7 @@ export default function DishMedia({
   const [isVisible, setIsVisible] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const showVideo = Boolean(videoUrl) && !videoFailed;
 
@@ -58,7 +59,30 @@ export default function DishMedia({
   if (videoFailed && !imageUrl) return null;
 
   return (
-    <div ref={containerRef} className="relative aspect-[4/3] w-full overflow-hidden bg-epi-surface-low">
+    <div
+      ref={containerRef}
+      onClick={() => showVideo && setFullscreen(true)}
+      className={`relative aspect-[4/3] w-full overflow-hidden bg-epi-surface-low ${showVideo ? "cursor-zoom-in" : ""}`}
+    >
+      {showVideo && isLoaded && (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white backdrop-blur">
+          360° · Toca para ver grande
+        </span>
+      )}
+      {fullscreen && videoUrl && (
+        // Video del plato en grande, en bucle: el comensal lo ve girar como si lo tuviera en la mesa.
+        <div
+          className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setFullscreen(false);
+          }}
+        >
+          <video src={videoUrl} poster={imageUrl ?? undefined} autoPlay muted loop playsInline className="max-h-[80vh] w-full max-w-xl rounded-2xl object-contain" />
+          <p className="mt-4 font-display text-xl font-bold text-white">{alt}</p>
+          <p className="mt-1 text-xs text-white/70">Toca en cualquier parte para cerrar</p>
+        </div>
+      )}
       {!isLoaded && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-epi-surface-low via-epi-surface-container to-epi-surface-low" />
       )}

@@ -1,5 +1,5 @@
 {
-  "name": "restaurant-rms",
+  "name": "rms-cafes",
   "private": true,
   "version": "0.1.0",
   "workspaces": [
@@ -14,6 +14,7 @@
     "dev:web": "npm run dev --workspace=web",
     "db:migrate": "npm run db:migrate --workspace=server",
     "db:seed": "npm run db:seed --workspace=server",
+    "db:seed:demo": "SEED=demo npm run db:seed --workspace=server",
     "db:studio": "npm run db:studio --workspace=server",
     "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=web",
     "start": "npm run build && npm run start --workspace=server"

@@ -20,7 +20,7 @@ async function main() {
 
   const rows = [];
   for (const table of tables) {
-    const url = `${baseUrl}/pedir/${encodeURIComponent(table.label)}`;
+    const url = `${baseUrl}/m/${table.publicToken}`;
     const fileName = `mesa-${table.label}.png`;
     await QRCode.toFile(fileURLToPath(new URL(fileName, outDir)), url, { width: 500, margin: 2 });
     rows.push({ label: table.label, url, fileName });

@@ -47,6 +47,7 @@ export default async function tableRoutes(fastify: FastifyInstance) {
       posY: t.posY,
       status: t.status,
       activeOrderId: t.orders[0]?.id ?? null,
+      publicToken: t.publicToken,
     }));
   });
 
@@ -120,6 +121,22 @@ export default async function tableRoutes(fastify: FastifyInstance) {
         data: { archived: true, label: `${table.label} (borrada ${Date.now()})` },
       });
       return { ok: true };
+    }
+  );
+
+  // Si un QR impreso se filtra (alguien le toma foto y pide desde afuera), se le cambia el
+  // codigo a la mesa: el QR viejo deja de funcionar y se imprime el nuevo.
+  fastify.post(
+    "/api/tables/:id/regenerate-qr",
+    { preHandler: requirePermission(PERMISSIONS.TABLES_MANAGE) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const { randomBytes } = await import("node:crypto");
+      const table = await fastify.prisma.restaurantTable.update({
+        where: { id },
+        data: { publicToken: randomBytes(12).toString("base64url") },
+      });
+      return { publicToken: table.publicToken };
     }
   );
 

@@ -17,11 +17,13 @@ export default {
           surface: "#ffffff",
           "surface-low": "#f5f3f3",
           "surface-container": "#efeded",
-          ink: "#1b1c1c",
+          // ink y gold salen de la marca de cada cafe (Admin > Asistente y marca), aplicada en
+          // tiempo de ejecucion como variables CSS. Ver applyBrand() en self-order/brand.ts.
+          ink: "rgb(var(--epi-ink) / <alpha-value>)",
           "ink-variant": "#444748",
           outline: "#747878",
           "outline-variant": "#c4c7c7",
-          gold: "#775a19",
+          gold: "rgb(var(--epi-gold) / <alpha-value>)",
           "gold-container": "#fed488",
           "on-gold-container": "#785a1a",
           error: "#ba1a1a",

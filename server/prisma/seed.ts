@@ -1,7 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, ROLE_NAMES, type RoleName } from "@rms/shared";
-import { restaurantConfig } from "./restaurant.config.js";
+import { restaurantConfig as realConfig } from "./restaurant.config.js";
+import { demoCafeConfig } from "./demo.config.js";
+
+// SEED=demo carga el "Café Demo" (menú, mesas y personal de ejemplo) para mostrarle el sistema
+// a un cliente antes de que exista su café. Sin SEED se usa restaurant.config.ts, el real.
+const restaurantConfig = process.env.SEED === "demo" ? demoCafeConfig : realConfig;
 
 const prisma = new PrismaClient();
 
@@ -75,7 +80,13 @@ async function main() {
   console.log("Perfil del restaurante...");
   const existingProfile = await prisma.restaurantProfile.findFirst();
   if (!existingProfile) {
-    await prisma.restaurantProfile.create({ data: { name: restaurantConfig.businessName } });
+    await prisma.restaurantProfile.create({
+      data: {
+        name: restaurantConfig.businessName,
+        // El demo arranca con colores de cafe para que se vea como un cliente real.
+        ...(process.env.SEED === "demo" ? { primaryColor: "#3b2a20", accentColor: "#b7792f" } : {}),
+      },
+    });
   }
 
   console.log("Estaciones de cocina...");

@@ -79,7 +79,12 @@ model RestaurantTable {
   posY     Float   @default(0)
   status   String  @default("FREE") // FREE | OCCUPIED | BILL_REQUESTED | RESERVED
   archived Boolean @default(false)
-  orders   Order[]
+  // Codigo secreto que va en el QR impreso de la mesa (/m/<publicToken>). No se usa el nombre
+  // de la mesa en el enlace para que nadie pueda pedir "a la Mesa 3" desde su casa adivinando
+  // la direccion: solo quien escanea el QR fisico tiene el codigo.
+  publicToken     String           @unique @default(cuid())
+  orders          Order[]
+  serviceRequests ServiceRequest[]
 }
 
 // ---------- Menu ----------
@@ -169,9 +174,39 @@ model Order {
   customerId     String?
   customer       Customer?       @relation(fields: [customerId], references: [id])
   items          OrderItem[]
+  tickets        OrderTicket[]
   payments       Payment[]
   createdAt      DateTime        @default(now())
   closedAt       DateTime?
+}
+
+// Una "comanda": lo que cocina prepara y entrega de una sola vez a una mesa.
+//
+// Todo lo que piden los comensales de una mesa mientras cocina todavia no confirma la comanda
+// entra en la misma (Laura pide un capuchino, Pedro un croissant un minuto despues: una sola
+// comanda para la Mesa 4). Cuando cocina la confirma queda cerrada, y lo que se pida despues
+// abre una comanda nueva. Asi la mesa se sirve completa, en el orden en que llego, y no a
+// pedazos mezclada con otras mesas.
+model OrderTicket {
+  id           String      @id @default(cuid())
+  orderId      String
+  order        Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Numero corto del dia (#1, #2 ...) para cantarlo en voz alta en la cocina.
+  number       Int
+  // SENT | SEEN | CONFIRMED | PREPARING | READY | ON_THE_WAY | DELIVERED | REJECTED
+  status       String      @default("SENT")
+  rejectReason String?
+  items        OrderItem[]
+  sentAt       DateTime    @default(now())
+  seenAt       DateTime?
+  confirmedAt  DateTime?
+  startedAt    DateTime?
+  readyAt      DateTime?
+  pickedUpAt   DateTime?
+  deliveredAt  DateTime?
+  rejectedAt   DateTime?
+
+  @@index([status])
 }
 
 // ---------- Loyalty (Fase 3) ----------
@@ -200,6 +235,14 @@ model OrderItem {
   course            String              @default("MAIN")
   stationId         String
   status            String              @default("QUEUED") // QUEUED | IN_PREPARATION | READY | SERVED | CANCELLED
+  ticketId          String?
+  ticket            OrderTicket?        @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  // Quien de la mesa lo pidio: dinerId es un id anonimo del celular del comensal, dinerName
+  // el nombre que escribio al escanear el QR (o "Invitado"). Vacios si lo tomo el mesero.
+  dinerId           String?
+  dinerName         String?
+  // Por que se cancelo: "Agotado", o lo que escriba cocina al rechazar. Se le muestra al comensal.
+  cancelReason      String?
   // Sobremesa que entra gratis con un almuerzo: se cobra en 0 y se muestra como "Incluida".
   isIncluded        Boolean             @default(false)
   notes             String?
@@ -328,6 +371,10 @@ model RestaurantProfile {
   policies    String?
   timezone    String  @default("America/Bogota")
   currency    String  @default("COP")
+  // Marca del cafe en la carta del comensal: logo y colores propios de cada cliente.
+  logoUrl      String?
+  primaryColor String  @default("#1b1c1c")
+  accentColor  String  @default("#775a19")
 }
 
 model RestaurantHour {
@@ -373,4 +420,46 @@ model ConversationMessage {
   role      String // user | assistant
   content   String
   createdAt DateTime            @default(now())
+}
+
+// ---------- Llamados desde la mesa ----------
+
+// El comensal toca "Llamar al mesero" o "Pedir la cuenta" en su celular.
+model ServiceRequest {
+  id           String          @id @default(cuid())
+  tableId      String
+  table        RestaurantTable @relation(fields: [tableId], references: [id])
+  type         String // WAITER | BILL
+  // Solo para BILL: ALL (toda la mesa) | MINE (solo lo de quien la pidio)
+  billScope    String?
+  // Como piensa pagar (orientativo para el cajero): CASH | CARD | TRANSFER
+  paymentHint  String?
+  dinerId      String?
+  dinerName    String?
+  status       String          @default("PENDING") // PENDING | ATTENDED
+  attendedById String?
+  createdAt    DateTime        @default(now())
+  attendedAt   DateTime?
+
+  @@index([status])
+}
+
+// ---------- Notificaciones push (celular bloqueado) ----------
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Ajustes internos de la instalacion (por ahora: las llaves VAPID de las notificaciones push,
+// que se generan solas la primera vez y no deben cambiar despues).
+model AppSetting {
+  key   String @id
+  value String
 }

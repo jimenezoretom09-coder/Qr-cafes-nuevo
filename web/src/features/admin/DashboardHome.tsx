@@ -32,25 +32,24 @@ export default function DashboardHome() {
         // Restaurante recien instalado, todavia sin configurar: en vez de un tablero en ceros,
         // se le muestra al dueño el orden en que conviene armar todo.
         <div className="mt-8 rounded-xl border border-blue-200 bg-blue-50 p-6">
-          <p className="font-semibold text-blue-900">Primeros pasos para dejar listo tu restaurante</p>
+          <p className="font-semibold text-blue-900">Primeros pasos para dejar listo tu café</p>
           <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-blue-900">
             <li>
-              <b>Menú</b>: crea tus estaciones de cocina (ej: Parrilla, Barra), tus categorías y tus platos con
-              precio.
+              <b>Menú</b>: crea tus estaciones (ej: Barra, Cocina), tus categorías y tus platos con precio. Agrega
+              foto y video 360° a cada plato.
             </li>
             <li>
-              <b>Mesas</b>: agrega cada mesa con su nombre — de ahí salen los códigos QR.
+              <b>Mesas</b> y <b>Códigos QR</b>: agrega cada mesa e imprime su QR.
             </li>
             <li>
               <b>Extras</b> (opcional): opciones como "¿con qué proteína?" o adicionales con precio.
             </li>
             <li>
-              <b>Usuarios</b>: crea a tus meseros, cocina y caja, cada uno con su PIN. Cambia también el PIN del
-              Administrador.
+              <b>Usuarios</b>: crea a tus meseros, cocina, barra y caja, cada uno con su PIN. Cambia también el PIN
+              del Administrador. En cada celular, toca "Activar avisos".
             </li>
             <li>
-              <b>Asistente IA</b>: dirección, teléfono y horario, para que el asistente responda bien a los
-              comensales.
+              <b>Asistente y marca</b>: logo y colores del café, dirección, teléfono y horario.
             </li>
           </ol>
         </div>

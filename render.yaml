@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: rms-pos-backend
+    name: rms-cafes-backend
     env: node
     plan: free
-    buildCommand: npm install && npm run build --workspace=shared && npx prisma generate --schema=server/prisma/schema.prisma && npm run build --workspace=server
+    buildCommand: npm install && npm run build --workspace=shared && npx prisma generate --schema=server/prisma/schema.prisma && npx prisma migrate deploy --schema=server/prisma/schema.prisma && npm run build --workspace=server
     startCommand: npm run start --workspace=server
     healthCheckPath: /api/health
     envVars:
@@ -16,6 +16,8 @@ services:
       - key: LLM_PROVIDER
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: VAPID_CONTACT
         sync: false
       - key: NODE_VERSION
         value: 20.18.0

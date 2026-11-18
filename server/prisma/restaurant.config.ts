@@ -1,6 +1,6 @@
 /**
- * Datos de ESTE restaurante — este es el único archivo que cambia de un
- * cliente a otro. Para instalar un restaurante nuevo: crea un repositorio a
+ * Datos de ESTE café — este es el único archivo que cambia de un
+ * cliente a otro (el logo y los colores se ponen después desde Admin > Asistente y marca). Para instalar un restaurante nuevo: crea un repositorio a
  * partir de la plantilla en GitHub, reemplaza el contenido de este archivo
  * con la información real del nuevo cliente (nombre, mesas, personal, menú),
  * y corre "npm run db:seed --workspace=server" contra su base de datos.
@@ -44,7 +44,7 @@ export interface RestaurantConfig {
 }
 
 export const restaurantConfig: RestaurantConfig = {
-  businessName: "La Azotea",
+  businessName: "Mi Café",
 
   stations: [],
 
