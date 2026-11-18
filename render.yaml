@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: rms-pos-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build --workspace=shared && npx prisma generate --schema=server/prisma/schema.prisma && npm run build --workspace=server
+    startCommand: npm run start --workspace=server
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: LLM_PROVIDER
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: 20.18.0

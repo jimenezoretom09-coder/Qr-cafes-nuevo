@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Identity & access control ----------
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  isSystem    Boolean          @default(true)
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model Permission {
+  id       String           @id @default(cuid())
+  key      String           @unique
+  category String
+  roles    RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model User {
+  id                 String            @id @default(cuid())
+  name               String
+  pinHash            String
+  passwordHash       String?
+  roleId             String
+  active             Boolean           @default(true)
+  role               Role              @relation(fields: [roleId], references: [id])
+  orders             Order[]
+  auditLogs          AuditLog[]
+  approvalsRequested ApprovalRequest[] @relation("requestedBy")
+  approvalsDecided   ApprovalRequest[] @relation("decidedBy")
+  paymentsTaken      Payment[]
+  cashSessionsOpened CashSession[]     @relation("cashSessionOpenedBy")
+  cashSessionsClosed CashSession[]     @relation("cashSessionClosedBy")
+  createdAt          DateTime          @default(now())
+}
+
+model ApprovalRequest {
+  id            String    @id @default(cuid())
+  type          String // DISCOUNT | VOID_ITEM | VOID_ORDER | REFUND
+  status        String    @default("PENDING") // PENDING | APPROVED | DENIED
+  reason        String?
+  payload       String? // JSON: e.g. { discountType, value } for DISCOUNT requests
+  entityType    String
+  entityId      String
+  requestedById String
+  requestedBy   User      @relation("requestedBy", fields: [requestedById], references: [id])
+  decidedById   String?
+  decidedBy     User?     @relation("decidedBy", fields: [decidedById], references: [id])
+  createdAt     DateTime  @default(now())
+  decidedAt     DateTime?
+}
+
+// ---------- Dining room ----------
+
+model RestaurantTable {
+  id       String  @id @default(cuid())
+  label    String  @unique
+  capacity Int     @default(4)
+  zone     String  @default("main")
+  posX     Float   @default(0)
+  posY     Float   @default(0)
+  status   String  @default("FREE") // FREE | OCCUPIED | BILL_REQUESTED | RESERVED
+  archived Boolean @default(false)
+  orders   Order[]
+}
+
+// ---------- Menu ----------
+
+model KitchenStation {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  color      String         @default("#64748b")
+  menuItems  MenuItem[]
+  categories MenuCategory[]
+}
+
+model MenuCategory {
+  id               String          @id @default(cuid())
+  name             String
+  sortOrder        Int             @default(0)
+  mealPeriod       String          @default("LUNCH") // BREAKFAST | LUNCH | ALL
+  archived         Boolean         @default(false)
+  defaultStationId String?
+  defaultStation   KitchenStation? @relation(fields: [defaultStationId], references: [id])
+  items            MenuItem[]
+}
+
+model MenuItem {
+  id                         String                  @id @default(cuid())
+  categoryId                 String
+  category                   MenuCategory            @relation(fields: [categoryId], references: [id])
+  name                       String
+  description                String?
+  imageUrl                   String?
+  videoUrl                   String?
+  allergens                  String[]                @default([])
+  // Sobremesa incluida con el almuerzo: cada almuerzo (includesDrink) da derecho a una
+  // bebida de las incluidas (isIncludedDrink). Las de mas se cobran.
+  includesDrink              Boolean                 @default(false)
+  isIncludedDrink            Boolean                 @default(false)
+  price                      Decimal
+  available                  Boolean                 @default(true)
+  archived                   Boolean                 @default(false)
+  stationId                  String
+  station                    KitchenStation          @relation(fields: [stationId], references: [id])
+  course                     String                  @default("MAIN") // STARTER | MAIN | DESSERT | DRINK
+  preparationTimeEstimateMin Int                     @default(10)
+  modifierGroups             MenuItemModifierGroup[]
+  orderItems                 OrderItem[]
+  createdAt                  DateTime                @default(now())
+}
+
+model ModifierGroup {
+  id        String                  @id @default(cuid())
+  name      String
+  minSelect Int                     @default(0)
+  maxSelect Int                     @default(1)
+  modifiers Modifier[]
+  menuItems MenuItemModifierGroup[]
+}
+
+model Modifier {
+  id             String              @id @default(cuid())
+  groupId        String
+  group          ModifierGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name           String
+  priceDelta     Decimal             @default(0)
+  orderItemLinks OrderItemModifier[]
+}
+
+model MenuItemModifierGroup {
+  menuItemId String
+  groupId    String
+  menuItem   MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  group      ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, groupId])
+}
+
+// ---------- Orders (Phase 1 core) ----------
+
+model Order {
+  id             String          @id @default(cuid())
+  tableId        String
+  table          RestaurantTable @relation(fields: [tableId], references: [id])
+  waiterId       String
+  waiter         User            @relation(fields: [waiterId], references: [id])
+  status         String          @default("OPEN") // OPEN | IN_PROGRESS | READY | SERVED | CLOSED | CANCELLED
+  discountAmount Decimal         @default(0)
+  discountReason String?
+  customerId     String?
+  customer       Customer?       @relation(fields: [customerId], references: [id])
+  items          OrderItem[]
+  payments       Payment[]
+  createdAt      DateTime        @default(now())
+  closedAt       DateTime?
+}
+
+// ---------- Loyalty (Fase 3) ----------
+
+model Customer {
+  id         String   @id @default(cuid())
+  name       String
+  phone      String?  @unique
+  email      String?
+  points     Int      @default(0)
+  visitCount Int      @default(0)
+  totalSpent Decimal  @default(0)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+}
+
+model OrderItem {
+  id                String              @id @default(cuid())
+  orderId           String
+  order             Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId        String
+  menuItem          MenuItem            @relation(fields: [menuItemId], references: [id])
+  nameSnapshot      String
+  unitPriceSnapshot Decimal
+  quantity          Int                 @default(1)
+  course            String              @default("MAIN")
+  stationId         String
+  status            String              @default("QUEUED") // QUEUED | IN_PREPARATION | READY | SERVED | CANCELLED
+  // Sobremesa que entra gratis con un almuerzo: se cobra en 0 y se muestra como "Incluida".
+  isIncluded        Boolean             @default(false)
+  notes             String?
+  modifiers         OrderItemModifier[]
+  paymentLinks      PaymentItem[]
+  paidAt            DateTime?
+  sentToKitchenAt   DateTime            @default(now())
+  startedAt         DateTime?
+  readyAt           DateTime?
+  servedAt          DateTime?
+
+  @@index([stationId, status])
+}
+
+model OrderItemModifier {
+  id                 String    @id @default(cuid())
+  orderItemId        String
+  orderItem          OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierId         String
+  modifier           Modifier  @relation(fields: [modifierId], references: [id])
+  nameSnapshot       String
+  priceDeltaSnapshot Decimal
+}
+
+// ---------- Payments & cash (Phase 2) ----------
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id])
+  method         String // CASH | CARD | DIGITAL
+  subtotalAmount Decimal       @default(0)
+  taxAmount      Decimal       @default(0)
+  serviceAmount  Decimal       @default(0)
+  tipAmount      Decimal       @default(0)
+  amount         Decimal // subtotal + tax + service + tip for this payment
+  splitGroupId   String?
+  splitLabel     String? // e.g. "1 de 3" for split-by-cover receipts
+  createdById    String
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  cashSessionId  String
+  cashSession    CashSession   @relation(fields: [cashSessionId], references: [id])
+  items          PaymentItem[]
+  refunded       Boolean       @default(false)
+  refundedAt     DateTime?
+  createdAt      DateTime      @default(now())
+}
+
+model PaymentItem {
+  id          String    @id @default(cuid())
+  paymentId   String
+  payment     Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model CashSession {
+  id                    String    @id @default(cuid())
+  openedById            String
+  openedBy              User      @relation("cashSessionOpenedBy", fields: [openedById], references: [id])
+  closedById            String?
+  closedBy              User?     @relation("cashSessionClosedBy", fields: [closedById], references: [id])
+  openingAmount         Decimal
+  closingAmountExpected Decimal?
+  closingAmountCounted  Decimal?
+  discrepancy           Decimal?
+  payments              Payment[]
+  openedAt              DateTime  @default(now())
+  closedAt              DateTime?
+}
+
+// ---------- Inventory (Phase 2 — schema only) ----------
+
+model InventoryItem {
+  id                String       @id @default(cuid())
+  name              String
+  unit              String
+  currentStock      Decimal      @default(0)
+  lowStockThreshold Decimal      @default(0)
+  recipeLinks       RecipeItem[]
+}
+
+model RecipeItem {
+  id              String        @id @default(cuid())
+  menuItemId      String
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantityUsed    Decimal
+}
+
+// ---------- Audit & notifications ----------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  metadata   String?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id           String   @id @default(cuid())
+  type         String
+  targetRole   String?
+  targetUserId String?
+  payload      String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+// ---------- Asistente de IA (Fase C) ----------
+// Sistema de un solo restaurante por instalacion — sin businessId, a
+// diferencia del proyecto hermano "asistente-restaurantes" del que se porto
+// esta arquitectura, que es multi-negocio.
+
+model RestaurantProfile {
+  id          String  @id @default(cuid())
+  name        String  @default("Mi restaurante")
+  description String?
+  tone        String?
+  address     String?
+  phone       String?
+  policies    String?
+  timezone    String  @default("America/Bogota")
+  currency    String  @default("COP")
+}
+
+model RestaurantHour {
+  id        String  @id @default(cuid())
+  dayOfWeek Int     @unique // 0=domingo .. 6=sabado
+  opensAt   String
+  closesAt  String
+  closed    Boolean @default(false)
+}
+
+model FaqItem {
+  id        String @id @default(cuid())
+  question  String
+  answer    String
+  sortOrder Int    @default(0)
+}
+
+// Preguntas que el asistente no pudo responder con confianza — el mecanismo
+// de "aprender con el tiempo": el admin las revisa y las convierte en FaqItem.
+model UnansweredQuestion {
+  id              String    @id @default(cuid())
+  question        String
+  normalizedText  String    @unique
+  timesAsked      Int       @default(1)
+  resolved        Boolean   @default(false)
+  promotedToFaqId String?
+  askedAt         DateTime  @default(now())
+  resolvedAt      DateTime?
+}
+
+model ConversationSession {
+  id            String   @id @default(cuid())
+  visitorId     String   @unique
+  startedAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+  messages      ConversationMessage[]
+}
+
+model ConversationMessage {
+  id        String              @id @default(cuid())
+  sessionId String
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // user | assistant
+  content   String
+  createdAt DateTime            @default(now())
+}

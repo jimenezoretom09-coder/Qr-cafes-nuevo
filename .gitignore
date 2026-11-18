@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.env
+*.db
+*.db-journal
+.DS_Store
+
+# Proyectos aparte que viven en esta misma carpeta de escritorio, no forman
+# parte del sistema de pedidos y no deben subirse a este repositorio.
+/asistente-restaurantes/
+/polla-mundial-2026/
+
+# Volcados de datos reales usados solo para la migracion a Postgres.
+server/scripts/data-export.json
+server/prisma/dev.db.backup-*
+server-start.log
+server/scripts/orders-backup-*.json
+
+# QR/enlaces de mesas generados: dependen de la URL publica del momento,
+# se regeneran con "node scripts/generate-table-qr.mjs <url>" cuando haga falta.
+server/scripts/qr-mesas/
+server/scripts/qr-mesas.html
+
+# Registro interno de clientes del negocio de reventa — no es parte del
+# producto que recibe cada restaurante, es solo para uso de Jimena/Claude.
+docs/clientes-registro.md
