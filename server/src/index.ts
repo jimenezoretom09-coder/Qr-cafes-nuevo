@@ -25,6 +25,7 @@ import assistantPublicRoutes, { assistantAdminRoutes } from "./modules/assistant
 import ticketRoutes from "./modules/tickets/routes.js";
 import serviceRequestRoutes from "./modules/service-requests/routes.js";
 import pushRoutes from "./modules/push/routes.js";
+import feedbackRoutes from "./modules/feedback/routes.js";
 import { startDelayWatcher } from "./modules/orders/delay-watcher.js";
 
 async function main() {
@@ -60,6 +61,7 @@ async function main() {
   await fastify.register(ticketRoutes);
   await fastify.register(serviceRequestRoutes);
   await fastify.register(pushRoutes);
+  await fastify.register(feedbackRoutes);
 
   // Estado del servidor: que version del codigo corre y si llega a la base de datos. Con un
   // cliente por instalacion, sirve para saber que version tiene cada restaurante y para

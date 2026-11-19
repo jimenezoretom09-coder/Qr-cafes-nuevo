@@ -12,6 +12,7 @@ import TableManager from "./TableManager";
 import AssistantPage from "./AssistantPage";
 import ModifiersPage from "./ModifiersPage";
 import QrCodesPage from "./QrCodesPage";
+import FeedbackPage from "./FeedbackPage";
 import ServiceDock from "../floor/ServiceDock";
 
 export default function AdminHome() {
@@ -35,6 +36,7 @@ export default function AdminHome() {
   const navItems = [
     { to: "", label: "Resumen" },
     ...(canViewReports ? [{ to: "reportes", label: "Reportes" }] : []),
+    ...(canViewReports ? [{ to: "opiniones", label: "Opiniones" }] : []),
     ...(canApprove ? [{ to: "aprobaciones", label: "Aprobaciones" }] : []),
     ...(canManageMenu ? [{ to: "menu", label: "Menú" }] : []),
     ...(canManageTables ? [{ to: "mesas", label: "Mesas" }] : []),
@@ -139,6 +141,7 @@ export default function AdminHome() {
         <Routes>
           <Route index element={<DashboardHome />} />
           <Route path="reportes" element={canViewReports ? <ReportsPage /> : <Navigate to=".." replace />} />
+          <Route path="opiniones" element={canViewReports ? <FeedbackPage /> : <Navigate to=".." replace />} />
           <Route path="aprobaciones" element={canApprove ? <ApprovalQueue /> : <Navigate to=".." replace />} />
           <Route path="menu" element={canManageMenu ? <MenuManager /> : <Navigate to=".." replace />} />
           <Route path="mesas" element={canManageTables ? <TableManager /> : <Navigate to=".." replace />} />

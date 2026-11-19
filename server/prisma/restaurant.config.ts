@@ -20,6 +20,19 @@
 
 export interface RestaurantConfig {
   businessName: string;
+  /** Datos del perfil (opcionales): se usan solo al crear el perfil la primera vez. */
+  profile?: {
+    description?: string;
+    tone?: string;
+    address?: string;
+    phone?: string;
+    policies?: string;
+    logoUrl?: string;
+    primaryColor?: string;
+    accentColor?: string;
+    tipSuggestionPercent?: number;
+    googleReviewUrl?: string;
+  };
   stations: { name: string; color: string }[];
   tables: { label: string; capacity: number; zone: string }[];
   staff: { name: string; roleName: string; pin: string }[];
@@ -40,6 +53,8 @@ export interface RestaurantConfig {
     course: "STARTER" | "MAIN" | "DESSERT" | "DRINK";
     preparationTimeEstimateMin?: number;
     modifierGroupKeys?: string[];
+    /** Contiene alcohol: sello +18 y confirmacion de edad. */
+    isAdult?: boolean;
   }[];
 }
 

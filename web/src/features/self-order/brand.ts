@@ -1,3 +1,5 @@
+import { newId } from "../../lib/id";
+
 /** "#3b2a20" -> "59 42 32", el formato que esperan las variables de color de Tailwind. */
 export function hexToRgbTriplet(hex: string): string | null {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -23,12 +25,12 @@ export function getDinerId(): string {
   try {
     let id = localStorage.getItem(key);
     if (!id) {
-      id = crypto.randomUUID();
+      id = newId();
       localStorage.setItem(key, id);
     }
     return id;
   } catch {
-    return crypto.randomUUID();
+    return newId();
   }
 }
 

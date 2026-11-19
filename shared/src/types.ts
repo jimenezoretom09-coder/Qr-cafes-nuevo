@@ -49,6 +49,8 @@ export interface MenuItemDTO {
   includesDrink: boolean;
   /** Bebida que puede entrar gratis con el almuerzo (mazamorra, claro, jugo del día). */
   isIncludedDrink: boolean;
+  /** Contiene alcohol: sello +18 en la carta. */
+  isAdult: boolean;
   price: number;
   available: boolean;
   stationId: string;
@@ -197,6 +199,8 @@ export interface ServiceRequestDTO {
   type: ServiceRequestType;
   billScope: "ALL" | "MINE" | null;
   paymentHint: "CASH" | "CARD" | "TRANSFER" | null;
+  /** Propina voluntaria que pidio incluir el cliente (0 = sin propina, null = no respondio). */
+  tipPercent: number | null;
   dinerName: string | null;
   status: "PENDING" | "ATTENDED";
   createdAt: string;

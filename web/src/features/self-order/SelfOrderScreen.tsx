@@ -7,6 +7,7 @@ import {
   fetchTableStatus,
   placeSelfOrder,
   requestService,
+  sendFeedback,
   type PublicMenuItem,
   type PublicMenuResponse,
   type PublicTableStatus,
@@ -119,6 +120,14 @@ export default function SelfOrderScreen() {
   const [billSheetOpen, setBillSheetOpen] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [askAge, setAskAge] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(() => {
+    try {
+      return sessionStorage.getItem("rms-age-ok") === "1";
+    } catch {
+      return false;
+    }
+  });
   const dinerId = useRef(getDinerId()).current;
   const lastSeenStatus = useRef<Map<string, string>>(new Map());
 
@@ -299,9 +308,15 @@ export default function SelfOrderScreen() {
     if (line) decrementLine(line.key);
   }
 
-  async function confirmOrder() {
+  async function confirmOrder(ageJustConfirmed = false) {
     if (!dinerName) {
       setEditingName(true);
+      return;
+    }
+    // Productos con alcohol: se confirma la edad una vez por visita, antes de enviar.
+    const adultIds = new Set((menu?.categories ?? []).flatMap((c) => c.items).filter((i) => i.isAdult).map((i) => i.id));
+    if (!ageConfirmed && !ageJustConfirmed && cart.some((l) => adultIds.has(l.menuItemId))) {
+      setAskAge(true);
       return;
     }
     setSubmitting(true);
@@ -350,11 +365,15 @@ export default function SelfOrderScreen() {
     }
   }
 
-  async function requestBill(billScope: "ALL" | "MINE", paymentHint: "CASH" | "CARD" | "TRANSFER") {
+  async function requestBill(
+    billScope: "ALL" | "MINE",
+    paymentHint: "CASH" | "CARD" | "TRANSFER",
+    tipPercent: number | undefined
+  ) {
     if (!dinerName) return setEditingName(true);
     setSendingRequest(true);
     try {
-      await requestService(token, { dinerId, dinerName }, { type: "BILL", billScope, paymentHint });
+      await requestService(token, { dinerId, dinerName }, { type: "BILL", billScope, paymentHint, tipPercent });
       setBillSheetOpen(false);
       showToast("Listo, ya te llevan la cuenta 🧾", "ok");
       refreshStatus();
@@ -370,6 +389,18 @@ export default function SelfOrderScreen() {
     setDinerName(name);
     setEditingName(false);
   }
+
+  // Cuando caja cierra la cuenta, se lleva al comensal a "¿Como estuvo todo?" (una sola vez).
+  const shownFeedbackFor = useRef<string | null>(null);
+  useEffect(() => {
+    const visit = tableStatus?.recentVisit;
+    if (!visit || visit.alreadyRated || shownFeedbackFor.current === visit.orderId) return;
+    shownFeedbackFor.current = visit.orderId;
+    if (Date.now() - new Date(visit.closedAt).getTime() < 15 * 60 * 1000) {
+      setView("status");
+      showToast("¡Gracias por tu visita! 🎩", "ok");
+    }
+  }, [tableStatus?.recentVisit, showToast]);
 
   const waiterPending = tableStatus?.pendingRequests.some((r) => r.type === "WAITER") ?? false;
   const billPending = tableStatus?.pendingRequests.some((r) => r.type === "BILL") ?? false;
@@ -415,6 +446,11 @@ export default function SelfOrderScreen() {
             <span className="shrink-0 font-body font-semibold text-epi-gold">{formatCOP(item.price)}</span>
           </div>
 
+          {item.isAdult && (
+            <span className="mt-2 inline-block rounded-full bg-epi-ink px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+              +18 · Contiene alcohol
+            </span>
+          )}
           {item.allergens.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {item.allergens.map((a) => (
@@ -545,12 +581,16 @@ export default function SelfOrderScreen() {
               ))}
             </div>
 
-            <div className="mb-6 flex flex-wrap gap-2">
+            {/* Una sola fila que se desliza: con cartas de 15+ categorias no se come la pantalla. */}
+            <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
               {visibleCategories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setActiveCategoryId(cat.id)}
-                  className={`rounded-full px-4 py-1.5 font-body text-sm font-semibold transition ${
+                  onClick={(e) => {
+                    setActiveCategoryId(cat.id);
+                    e.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                  }}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 font-body text-sm font-semibold transition ${
                     activeCategoryId === cat.id
                       ? "bg-epi-ink text-white"
                       : "border border-epi-outline-variant text-epi-ink-variant"
@@ -638,7 +678,19 @@ export default function SelfOrderScreen() {
         )}
 
         {view === "status" && (
-          <TicketTracker status={tableStatus} onRequestBill={() => setBillSheetOpen(true)} onOrderMore={orderMore} />
+          <TicketTracker
+            status={tableStatus}
+            onRequestBill={() => setBillSheetOpen(true)}
+            onOrderMore={orderMore}
+            onFeedback={async (rating, comment) => {
+              if (!tableStatus?.recentVisit || !dinerName) return;
+              await sendFeedback(token, { dinerId, dinerName }, {
+                orderId: tableStatus.recentVisit.orderId,
+                rating,
+                comment: comment || undefined,
+              });
+            }}
+          />
         )}
       </div>
 
@@ -704,7 +756,7 @@ export default function SelfOrderScreen() {
             Seguir viendo
           </button>
           <button
-            onClick={confirmOrder}
+            onClick={() => confirmOrder()}
             disabled={submitting || cart.length === 0}
             className="flex-1 rounded bg-epi-ink py-3 font-body text-sm font-semibold uppercase tracking-wide text-white disabled:opacity-50"
           >
@@ -733,8 +785,44 @@ export default function SelfOrderScreen() {
         />
       )}
 
+      {askAge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="animate-pop w-full max-w-sm rounded-2xl bg-epi-surface p-6 text-center font-body">
+            <p className="text-3xl">🔞</p>
+            <h2 className="mt-2 font-display text-xl font-bold text-epi-ink">Tu pedido tiene alcohol</h2>
+            <p className="mt-2 text-sm text-epi-ink-variant">
+              La venta de bebidas alcohólicas es solo para mayores de 18 años. Puede que te pidan tu documento.
+            </p>
+            <button
+              onClick={() => {
+                setAgeConfirmed(true);
+                setAskAge(false);
+                try {
+                  sessionStorage.setItem("rms-age-ok", "1");
+                } catch {
+                  /* nada */
+                }
+                confirmOrder(true);
+              }}
+              className="mt-4 w-full rounded-lg bg-epi-ink py-3 text-sm font-semibold uppercase tracking-wide text-white"
+            >
+              Soy mayor de 18 · Enviar
+            </button>
+            <button onClick={() => setAskAge(false)} className="mt-2 w-full py-2 text-sm text-epi-ink-variant">
+              Volver a mi pedido
+            </button>
+          </div>
+        </div>
+      )}
+
       {billSheetOpen && (
-        <BillSheet sending={sendingRequest} onCancel={() => setBillSheetOpen(false)} onSend={requestBill} />
+        <BillSheet
+          sending={sendingRequest}
+          tipSuggestionPercent={menu.business.tipSuggestionPercent}
+          amounts={tableStatus?.bill ? { mine: tableStatus.bill.mine, table: tableStatus.bill.table } : null}
+          onCancel={() => setBillSheetOpen(false)}
+          onSend={requestBill}
+        />
       )}
 
       {(dinerName === null || editingName) && (

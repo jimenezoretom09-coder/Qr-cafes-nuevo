@@ -32,8 +32,22 @@ con su propio logo, colores y menú. Ver [docs/manual-instalacion-cliente.md](do
 - **Caja**: cobro, división de cuenta, turnos de caja, y aviso de las mesas que piden la cuenta.
 - **Dueño (Administrador)**: acceso a todo — menú, mesas, **códigos QR para imprimir con su
   logo**, marca (logo y colores), personal, reportes, asistente.
+- **Propina voluntaria**: el cliente decide desde su celular si incluye el 10% sugerido al pedir
+  la cuenta (en Colombia hay que preguntarlo); caja y mesero lo ven en el llamado.
+- **Productos +18**: sello "Contiene alcohol" y confirmación de edad antes de enviar el pedido.
+- **"¿Cómo estuvo todo?"** al pagar: la calificación llega al dueño (Admin → Opiniones; las de 3★
+  o menos como aviso al celular) y a todos se les ofrece por igual dejar reseña en Google.
+- **QR temáticos**: Admin → Códigos QR → diseño "Alicia en el país de las maravillas", un
+  personaje por mesa (12), con los QR reales listos para imprimir.
 - **Notificaciones push** en el celular del personal **aunque esté bloqueado**: nuevo pedido
   (cocina, barra, dueño), pedido listo (mesero), mesa llama / pide la cuenta (mesero, caja, dueño).
+
+## Probarlo en tu computador (sin subir nada)
+
+Doble clic en **`iniciar-demo.bat`** (Windows) o `./iniciar-demo.sh` (Mac/Linux). Solo necesita
+Node.js. Arranca su propia base de datos, carga la carta de El Sombrerero y muestra la dirección
+y un QR para entrar desde el celular por el mismo Wi-Fi. Guía paso a paso:
+[docs/probar-en-mi-computador.md](docs/probar-en-mi-computador.md).
 
 ## Desarrollo
 

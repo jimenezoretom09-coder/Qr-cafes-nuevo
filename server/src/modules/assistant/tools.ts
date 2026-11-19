@@ -251,6 +251,7 @@ export async function executeTool(
             price: i.price.toString(),
             allergens: i.allergens,
             tienePreview: Boolean(i.imageUrl || i.videoUrl),
+            mayoresDe18: i.isAdult,
             extras: i.modifierGroups.map((link) => ({
               grupo: link.group.name,
               minSelect: link.group.minSelect,

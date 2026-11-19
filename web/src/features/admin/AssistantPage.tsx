@@ -38,6 +38,8 @@ export default function AssistantPage() {
     logoUrl: "",
     primaryColor: "#1b1c1c",
     accentColor: "#775a19",
+    tipSuggestionPercent: 10,
+    googleReviewUrl: "",
   });
   useEffect(() => {
     if (profile) {
@@ -51,12 +53,19 @@ export default function AssistantPage() {
         logoUrl: profile.logoUrl ?? "",
         primaryColor: profile.primaryColor,
         accentColor: profile.accentColor,
+        tipSuggestionPercent: profile.tipSuggestionPercent,
+        googleReviewUrl: profile.googleReviewUrl ?? "",
       });
     }
   }, [profile]);
 
   const profileMutation = useMutation({
-    mutationFn: () => updateAssistantProfile({ ...profileForm, logoUrl: profileForm.logoUrl.trim() || null }),
+    mutationFn: () =>
+      updateAssistantProfile({
+        ...profileForm,
+        logoUrl: profileForm.logoUrl.trim() || null,
+        googleReviewUrl: profileForm.googleReviewUrl.trim() || null,
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant-profile"] }),
   });
 
@@ -217,6 +226,30 @@ export default function AssistantPage() {
             </span>
             <span className="text-sm font-bold" style={{ color: profileForm.accentColor }}>$8.500</span>
           </div>
+          <label className="text-xs font-semibold text-slate-600">
+            Propina voluntaria sugerida (%)
+            <input
+              type="number"
+              min={0}
+              max={30}
+              value={profileForm.tipSuggestionPercent}
+              onChange={(e) => setProfileForm({ ...profileForm, tipSuggestionPercent: Number(e.target.value) || 0 })}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+            />
+            <span className="font-normal text-slate-400">0 = no se le pregunta al cliente</span>
+          </label>
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
+            Enlace para reseñas en Google Maps
+            <input
+              placeholder="https://g.page/r/…/review"
+              value={profileForm.googleReviewUrl}
+              onChange={(e) => setProfileForm({ ...profileForm, googleReviewUrl: e.target.value })}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+            />
+            <span className="font-normal text-slate-400">
+              Se le ofrece a todos los clientes después de calificar (en Google: Perfil del negocio → Pedir reseñas).
+            </span>
+          </label>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input

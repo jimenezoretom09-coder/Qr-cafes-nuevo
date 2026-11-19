@@ -22,6 +22,8 @@ const profileSchema = z.object({
   logoUrl: z.string().max(500).nullable().optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  tipSuggestionPercent: z.number().int().min(0).max(30).optional(),
+  googleReviewUrl: z.string().url().max(500).nullable().optional(),
 });
 
 const hourSchema = z.object({

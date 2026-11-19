@@ -25,3 +25,6 @@ server/scripts/qr-mesas.html
 # Registro interno de clientes del negocio de reventa — no es parte del
 # producto que recibe cada restaurante, es solo para uso de Jimena/Claude.
 docs/clientes-registro.md
+
+# Base de datos y claves de la demo local (iniciar-demo)
+.demo-local/

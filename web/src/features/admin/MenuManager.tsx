@@ -104,7 +104,15 @@ export default function MenuManager() {
   });
 
   const sobremesaMutation = useMutation({
-    mutationFn: ({ id, ...campos }: { id: string; includesDrink?: boolean; isIncludedDrink?: boolean }) =>
+    mutationFn: ({
+      id,
+      ...campos
+    }: {
+      id: string;
+      includesDrink?: boolean;
+      isIncludedDrink?: boolean;
+      isAdult?: boolean;
+    }) =>
       updateMenuItem(id, campos),
     onSuccess: invalidateMenu,
   });
@@ -325,6 +333,14 @@ export default function MenuManager() {
                         }
                       />
                       Es sobremesa incluida
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={item.isAdult}
+                        onChange={(e) => sobremesaMutation.mutate({ id: item.id, isAdult: e.target.checked })}
+                      />
+                      +18 (contiene alcohol)
                     </label>
                   </div>
                   <input

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { newId } from "../../lib/id";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCOP, TIP_SUGGESTIONS, type PaymentMethod } from "@rms/shared";
@@ -78,7 +79,7 @@ export default function PaymentScreen() {
         return recordPayment(orderId!, { method, tipAmount, itemPortions: selectedPortions });
       }
       if (mode === "SPLIT_EVEN") {
-        const groupId = splitGroupId ?? crypto.randomUUID();
+        const groupId = splitGroupId ?? newId();
         if (!splitGroupId) setSplitGroupId(groupId);
         return recordPayment(orderId!, { method, tipAmount, splitEvenly: { groupId, partsTotal: splitCount } });
       }

@@ -20,6 +20,15 @@ Base: la plantilla de restaurantes (fases 1–3 abajo). Lo nuevo para cafés:
 - **Video 360°** en bucle con visor a pantalla completa.
 - **Café Demo** (`SEED=demo`) para demostraciones de venta.
 
+Agregado para El Sombrerero (noviembre 2026):
+- Carta real cargada en `server/prisma/demos/el-sombrerero.config.ts` (`SEED=sombrerero`).
+- Propina voluntaria en "Pedir la cuenta" (`ServiceRequest.tipPercent`, `RestaurantProfile.tipSuggestionPercent`).
+- Productos +18 (`MenuItem.isAdult`) con confirmación de edad.
+- Opiniones al pagar (`Feedback`), página Admin → Opiniones y enlace a reseñas de Google para todos
+  por igual (no se filtra por calificación: Google lo prohíbe).
+- Tarjetas QR temáticas de Alicia dentro de la app (`web/src/features/admin/qr-themes/alicia.ts`).
+- Demo local de un clic (`iniciar-demo.bat`, `scripts/demo-local.mjs`) con base de datos embebida.
+
 Pendiente / ideas:
 - Realidad aumentada (ver el plato sobre la mesa con la cámara): técnicamente viable con
   `<model-viewer>` en el navegador, pero cada plato necesita un modelo 3D escaneado. Decidido

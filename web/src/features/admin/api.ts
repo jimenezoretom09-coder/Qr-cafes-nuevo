@@ -94,6 +94,7 @@ export async function updateMenuItem(
     allergens: string[];
     includesDrink: boolean;
     isIncludedDrink: boolean;
+    isAdult: boolean;
   }>
 ) {
   await api.patch(`/api/menu/items/${id}`, input);

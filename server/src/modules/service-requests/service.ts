@@ -17,6 +17,7 @@ export function toServiceRequestDTO(r: Row): ServiceRequestDTO {
     type: r.type as ServiceRequestDTO["type"],
     billScope: r.billScope as ServiceRequestDTO["billScope"],
     paymentHint: r.paymentHint as ServiceRequestDTO["paymentHint"],
+    tipPercent: r.tipPercent,
     dinerName: r.dinerName,
     status: r.status as ServiceRequestDTO["status"],
     createdAt: r.createdAt.toISOString(),
@@ -39,6 +40,7 @@ export async function createServiceRequest(
     type: "WAITER" | "BILL";
     billScope?: "ALL" | "MINE";
     paymentHint?: "CASH" | "CARD" | "TRANSFER";
+    tipPercent?: number;
     dinerId?: string;
     dinerName?: string;
   }
@@ -53,6 +55,7 @@ export async function createServiceRequest(
         data: {
           billScope: params.billScope ?? existing.billScope,
           paymentHint: params.paymentHint ?? existing.paymentHint,
+          tipPercent: params.tipPercent ?? existing.tipPercent,
           dinerName: params.dinerName ?? existing.dinerName,
         },
         include: { table: true },
@@ -63,6 +66,7 @@ export async function createServiceRequest(
           type: params.type,
           billScope: params.type === "BILL" ? params.billScope ?? "ALL" : null,
           paymentHint: params.type === "BILL" ? params.paymentHint ?? null : null,
+          tipPercent: params.type === "BILL" ? params.tipPercent ?? null : null,
           dinerId: params.dinerId,
           dinerName: params.dinerName,
         },
@@ -88,9 +92,11 @@ export async function createServiceRequest(
   } else {
     const scope = dto.billScope === "MINE" ? `solo la de ${dto.dinerName ?? "un comensal"}` : "de toda la mesa";
     const hint = dto.paymentHint ? ` · Paga con ${PAYMENT_HINT_LABEL[dto.paymentHint]}` : "";
+    const tip =
+      dto.tipPercent === null ? "" : dto.tipPercent === 0 ? " · Sin propina" : ` · Propina ${dto.tipPercent}%`;
     await sendPushToRoles(prisma, ["WAITER", "CASHIER", "MANAGER", "ADMIN"], {
       title: `🧾 Mesa ${dto.tableLabel} pide la cuenta`,
-      body: `Cuenta ${scope}${hint}.`,
+      body: `Cuenta ${scope}${hint}${tip}.`,
       url: "/waiter",
       tag: `service-${dto.id}`,
     });

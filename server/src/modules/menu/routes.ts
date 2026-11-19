@@ -32,6 +32,7 @@ const createItemSchema = z.object({
   allergens: z.array(z.string()).optional(),
   includesDrink: z.boolean().optional(),
   isIncludedDrink: z.boolean().optional(),
+  isAdult: z.boolean().optional(),
   price: z.number().positive(),
   categoryId: z.string(),
   stationId: z.string(),

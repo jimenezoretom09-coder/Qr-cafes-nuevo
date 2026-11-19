@@ -3,10 +3,13 @@ import bcrypt from "bcryptjs";
 import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, ROLE_NAMES, type RoleName } from "@rms/shared";
 import { restaurantConfig as realConfig } from "./restaurant.config.js";
 import { demoCafeConfig } from "./demo.config.js";
+import { sombrereroConfig } from "./demos/el-sombrerero.config.js";
 
 // SEED=demo carga el "Café Demo" (menú, mesas y personal de ejemplo) para mostrarle el sistema
 // a un cliente antes de que exista su café. Sin SEED se usa restaurant.config.ts, el real.
-const restaurantConfig = process.env.SEED === "demo" ? demoCafeConfig : realConfig;
+// SEED=sombrerero carga la carta real de El Sombrerero (para la demostracion de venta).
+const restaurantConfig =
+  process.env.SEED === "demo" ? demoCafeConfig : process.env.SEED === "sombrerero" ? sombrereroConfig : realConfig;
 
 const prisma = new PrismaClient();
 
@@ -85,6 +88,7 @@ async function main() {
         name: restaurantConfig.businessName,
         // El demo arranca con colores de cafe para que se vea como un cliente real.
         ...(process.env.SEED === "demo" ? { primaryColor: "#3b2a20", accentColor: "#b7792f" } : {}),
+        ...(restaurantConfig.profile ?? {}),
       },
     });
   }
@@ -146,6 +150,7 @@ async function main() {
       stationId,
       course: item.course,
       preparationTimeEstimateMin: item.preparationTimeEstimateMin ?? 10,
+      isAdult: item.isAdult ?? false,
     };
     const existing = await prisma.menuItem.findFirst({ where: { name: item.name } });
     const menuItem = existing

@@ -1,5 +1,6 @@
 import { formatCOP, TICKET_STATUS_FLOW, TICKET_STATUS_LABELS, type TicketStatus } from "@rms/shared";
 import type { PublicTableStatus, PublicTicket } from "./api";
+import VisitFeedback from "./VisitFeedback";
 
 const STEP_TIME_FIELD: Record<Exclude<TicketStatus, "REJECTED">, keyof PublicTicket> = {
   SENT: "sentAt",
@@ -147,12 +148,34 @@ export default function TicketTracker({
   status,
   onRequestBill,
   onOrderMore,
+  onFeedback,
 }: {
   status: PublicTableStatus | null;
   onRequestBill: () => void;
   onOrderMore: () => void;
+  onFeedback: (rating: number, comment: string) => Promise<void>;
 }) {
   if (!status) return <p className="mt-8 text-center text-sm text-epi-ink-variant">Cargando tu pedido…</p>;
+
+  // Cuenta recien pagada: se agradece y se ofrece calificar (o, si ya califico, la reseña en Google).
+  if (status.tickets.length === 0 && status.recentVisit) {
+    return (
+      <div className="space-y-4">
+        <div className="mt-4 text-center">
+          <p className="font-display text-2xl font-bold text-epi-ink">¡Gracias por tu visita!</p>
+          <p className="mt-1 text-sm text-epi-ink-variant">Tu cuenta ya quedó pagada.</p>
+        </div>
+        <VisitFeedback
+          googleReviewUrl={status.recentVisit.googleReviewUrl}
+          alreadyRated={status.recentVisit.alreadyRated}
+          onSend={onFeedback}
+        />
+        <button onClick={onOrderMore} className="w-full rounded-lg border border-epi-ink py-3 text-sm font-semibold uppercase tracking-wide text-epi-ink">
+          Ver la carta
+        </button>
+      </div>
+    );
+  }
 
   if (status.tickets.length === 0) {
     return (

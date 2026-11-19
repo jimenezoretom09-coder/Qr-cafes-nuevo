@@ -5,6 +5,24 @@ import type { TableDTO } from "@rms/shared";
 import { api, getErrorMessage } from "../../lib/api";
 import { fetchAssistantProfile } from "./assistant-api";
 import { fetchTablesAdmin } from "./api";
+import { ALICE_CHARACTERS, buildAliceCardsHtml } from "./qr-themes/alicia";
+
+type Theme = "classic" | "alicia";
+
+function readPref(key: string, fallback: string) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function savePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* sin almacenamiento */
+  }
+}
 
 function tableUrl(t: TableDTO) {
   return `${window.location.origin}/m/${t.publicToken}`;
@@ -27,6 +45,8 @@ export default function QrCodesPage() {
   const { data: tables = [] } = useQuery({ queryKey: ["tables"], queryFn: fetchTablesAdmin });
   const { data: profile } = useQuery({ queryKey: ["assistant-profile"], queryFn: fetchAssistantProfile });
   const [images, setImages] = useState<Record<string, string>>({});
+  const [theme, setTheme] = useState<Theme>(() => readPref("rms-qr-theme", "classic") as Theme);
+  const [tagline, setTagline] = useState(() => readPref("rms-qr-tagline", "Café · Brunch"));
 
   const sorted = [...tables].sort(naturalSort);
   const color = profile?.primaryColor ?? "#1b1c1c";
@@ -49,7 +69,31 @@ export default function QrCodesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tables"] }),
   });
 
+  async function printAlice() {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const cards = await Promise.all(
+      sorted.map(async (t, i) => {
+        const character = ALICE_CHARACTERS[i % ALICE_CHARACTERS.length];
+        const qrSvg = await QRCode.toString(tableUrl(t), {
+          type: "svg",
+          errorCorrectionLevel: "H",
+          margin: 0,
+          color: { dark: character.color, light: "#0000" },
+        });
+        return { tableLabel: t.label, qrSvg, character };
+      })
+    );
+    const logo = profile?.logoUrl ? new URL(profile.logoUrl, window.location.origin).href : null;
+    win.document.write(buildAliceCardsHtml({ businessName: profile?.name ?? "", tagline, logoUrl: logo, cards }));
+    win.document.close();
+  }
+
   function printAll() {
+    if (theme === "alicia") {
+      printAlice();
+      return;
+    }
     const name = escapeHtml(profile?.name ?? "");
     const logo = profile?.logoUrl ? `<img class="logo" src="${escapeHtml(profile.logoUrl)}" />` : "";
     const cards = sorted
@@ -95,6 +139,41 @@ export default function QrCodesPage() {
           🖨 Imprimir todos
         </button>
       </div>
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <label className="text-xs font-semibold text-slate-600">
+          Diseño de las tarjetas
+          <select
+            value={theme}
+            onChange={(e) => {
+              setTheme(e.target.value as Theme);
+              savePref("rms-qr-theme", e.target.value);
+            }}
+            className="mt-1 block rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+          >
+            <option value="classic">Clásico (logo y colores del café)</option>
+            <option value="alicia">Alicia en el país de las maravillas (un personaje por mesa)</option>
+          </select>
+        </label>
+        {theme === "alicia" && (
+          <label className="flex-1 text-xs font-semibold text-slate-600">
+            Subtítulo bajo el nombre
+            <input
+              value={tagline}
+              onChange={(e) => {
+                setTagline(e.target.value);
+                savePref("rms-qr-tagline", e.target.value);
+              }}
+              className="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+            />
+          </label>
+        )}
+        {theme === "alicia" && (
+          <p className="w-full text-xs text-slate-500">
+            Cada mesa recibe un personaje, en orden: {ALICE_CHARACTERS.map((c, i) => `${i + 1}. ${c.name}`).join(" · ")}.
+          </p>
+        )}
+      </div>
+
       {regenerate.isError && <p className="mb-3 text-sm font-medium text-red-600">{getErrorMessage(regenerate.error)}</p>}
       {sorted.length === 0 && <p className="text-slate-500">Primero crea las mesas en la sección Mesas.</p>}
 

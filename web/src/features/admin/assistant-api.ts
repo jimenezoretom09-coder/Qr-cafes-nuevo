@@ -13,6 +13,8 @@ export interface RestaurantProfileDTO {
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  tipSuggestionPercent: number;
+  googleReviewUrl: string | null;
 }
 
 export interface RestaurantHourDTO {

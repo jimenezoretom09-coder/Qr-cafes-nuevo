@@ -70,6 +70,23 @@ model ApprovalRequest {
 
 // ---------- Dining room ----------
 
+// Calificacion que deja el cliente desde su celular al terminar (despues de pagar). Es para el
+// dueño: cualquier calificacion se guarda aqui, buena o mala.
+model Feedback {
+  id        String          @id @default(cuid())
+  tableId   String
+  table     RestaurantTable @relation(fields: [tableId], references: [id])
+  orderId   String
+  dinerId   String
+  dinerName String?
+  rating    Int // 1..5
+  comment   String?
+  createdAt DateTime        @default(now())
+
+  @@unique([orderId, dinerId])
+  @@index([createdAt])
+}
+
 model RestaurantTable {
   id       String  @id @default(cuid())
   label    String  @unique
@@ -85,6 +102,7 @@ model RestaurantTable {
   publicToken     String           @unique @default(cuid())
   orders          Order[]
   serviceRequests ServiceRequest[]
+  feedback        Feedback[]
 }
 
 // ---------- Menu ----------
@@ -121,6 +139,8 @@ model MenuItem {
   // bebida de las incluidas (isIncludedDrink). Las de mas se cobran.
   includesDrink              Boolean                 @default(false)
   isIncludedDrink            Boolean                 @default(false)
+  // Contiene alcohol: en la carta lleva el sello +18 y el comensal confirma su edad al pedirlo.
+  isAdult                    Boolean                 @default(false)
   price                      Decimal
   available                  Boolean                 @default(true)
   archived                   Boolean                 @default(false)
@@ -375,6 +395,11 @@ model RestaurantProfile {
   logoUrl      String?
   primaryColor String  @default("#1b1c1c")
   accentColor  String  @default("#775a19")
+  // Propina voluntaria sugerida (en Colombia se debe preguntar al cliente si la incluye).
+  // 0 = el cafe no sugiere propina y no se pregunta.
+  tipSuggestionPercent Int     @default(10)
+  // Enlace para dejar resena en Google Maps (se le ofrece a todos los clientes por igual).
+  googleReviewUrl      String?
 }
 
 model RestaurantHour {
@@ -434,6 +459,8 @@ model ServiceRequest {
   billScope    String?
   // Como piensa pagar (orientativo para el cajero): CASH | CARD | TRANSFER
   paymentHint  String?
+  // Propina voluntaria que el cliente pidio incluir (0 = sin propina, null = no respondio).
+  tipPercent   Int?
   dinerId      String?
   dinerName    String?
   status       String          @default("PENDING") // PENDING | ATTENDED

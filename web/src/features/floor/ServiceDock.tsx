@@ -31,6 +31,11 @@ function RequestCard({ r, busy, onAttend }: { r: ServiceRequestDTO; busy: boolea
               : `Llama al mesero${r.dinerName ? ` · ${r.dinerName}` : ""}`}
           </p>
           {isBill && r.paymentHint && <p className="text-sm text-slate-600">{HINT_LABEL[r.paymentHint]}</p>}
+          {isBill && r.tipPercent !== null && (
+            <p className={`text-sm font-semibold ${r.tipPercent > 0 ? "text-emerald-700" : "text-slate-600"}`}>
+              {r.tipPercent > 0 ? `Incluir propina ${r.tipPercent}%` : "Sin propina"}
+            </p>
+          )}
         </div>
         <span className="shrink-0 text-xs font-semibold text-slate-500">{minutesAgo(r.createdAt)}</span>
       </div>

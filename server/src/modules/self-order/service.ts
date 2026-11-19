@@ -4,6 +4,10 @@ import { computeBillTotals, round2, type TicketStatus } from "@rms/shared";
 import { createOrGrowOrder } from "../orders/service.js";
 import { getTicketDTOs } from "../tickets/service.js";
 import { getSelfServiceUserId } from "./self-service-user.js";
+import { sendPushToRoles } from "../push/service.js";
+
+// Despues de pagar, el cliente tiene este tiempo para calificar su visita desde la mesa.
+const FEEDBACK_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 const OPEN_ORDER_STATUSES = ["OPEN", "IN_PROGRESS", "READY", "SERVED"];
 
@@ -39,6 +43,7 @@ export async function getPublicMenuForTable(prisma: PrismaClient, token: string)
       logoUrl: profile?.logoUrl ?? null,
       primaryColor: profile?.primaryColor ?? "#1b1c1c",
       accentColor: profile?.accentColor ?? "#775a19",
+      tipSuggestionPercent: profile?.tipSuggestionPercent ?? 10,
     },
     categories: categories
       .filter((c) => c.items.length > 0)
@@ -55,6 +60,7 @@ export async function getPublicMenuForTable(prisma: PrismaClient, token: string)
           allergens: i.allergens,
           price: i.price.toNumber(),
           course: i.course,
+          isAdult: i.isAdult,
           preparationTimeEstimateMin: i.preparationTimeEstimateMin,
           modifierGroups: i.modifierGroups.map((link) => ({
             id: link.group.id,
@@ -124,7 +130,13 @@ export async function getPublicTableStatus(prisma: PrismaClient, token: string, 
   });
 
   if (!order) {
-    return { tableLabel: table.label, tickets: [], bill: null, pendingRequests };
+    return {
+      tableLabel: table.label,
+      tickets: [],
+      bill: null,
+      pendingRequests,
+      recentVisit: dinerId ? await findRecentVisit(prisma, table.id, dinerId) : null,
+    };
   }
 
   const itemById = new Map(order.items.map((i) => [i.id, i]));
@@ -146,6 +158,7 @@ export async function getPublicTableStatus(prisma: PrismaClient, token: string, 
   return {
     tableLabel: table.label,
     pendingRequests,
+    recentVisit: null,
     // Lo mas reciente arriba: es lo que el comensal esta esperando.
     tickets: tickets
       .slice()
@@ -191,4 +204,67 @@ export async function getPublicTableStatus(prisma: PrismaClient, token: string, 
       ).map(([name, amount]) => ({ name, amount })),
     },
   };
+}
+
+/**
+ * La cuenta que este comensal acaba de pagar en esta mesa (si pidio algo en ella), para
+ * ofrecerle calificar la visita. null si no hay, o si ya califico.
+ */
+async function findRecentVisit(prisma: PrismaClient, tableId: string, dinerId: string) {
+  const order = await prisma.order.findFirst({
+    where: {
+      tableId,
+      status: "CLOSED",
+      closedAt: { gte: new Date(Date.now() - FEEDBACK_WINDOW_MS) },
+      items: { some: { dinerId } },
+    },
+    orderBy: { closedAt: "desc" },
+  });
+  if (!order) return null;
+
+  const [already, profile] = await Promise.all([
+    prisma.feedback.findUnique({ where: { orderId_dinerId: { orderId: order.id, dinerId } } }),
+    prisma.restaurantProfile.findFirst({ select: { googleReviewUrl: true } }),
+  ]);
+  return {
+    orderId: order.id,
+    closedAt: order.closedAt!.toISOString(),
+    alreadyRated: Boolean(already),
+    googleReviewUrl: profile?.googleReviewUrl ?? null,
+  };
+}
+
+export async function saveFeedback(
+  prisma: PrismaClient,
+  params: { token: string; orderId: string; dinerId: string; dinerName: string; rating: number; comment?: string }
+) {
+  const table = await findTableByToken(prisma, params.token);
+  if (!table) throw new Error("Mesa no encontrada");
+
+  // Solo quien pidio en esa cuenta de esa mesa puede calificarla.
+  const order = await prisma.order.findFirst({
+    where: { id: params.orderId, tableId: table.id, items: { some: { dinerId: params.dinerId } } },
+  });
+  if (!order) throw new Error("No encontramos tu visita");
+
+  const data = {
+    rating: params.rating,
+    comment: params.comment || null,
+    dinerName: params.dinerName,
+  };
+  await prisma.feedback.upsert({
+    where: { orderId_dinerId: { orderId: order.id, dinerId: params.dinerId } },
+    update: data,
+    create: { ...data, tableId: table.id, orderId: order.id, dinerId: params.dinerId },
+  });
+
+  // Una mala experiencia le llega al dueño de una vez, para que pueda reaccionar.
+  if (params.rating <= 3) {
+    await sendPushToRoles(prisma, ["ADMIN", "MANAGER"], {
+      title: `${"★".repeat(params.rating)}${"☆".repeat(5 - params.rating)} Mesa ${table.label}`,
+      body: params.comment ? `${params.dinerName}: ${params.comment}` : `${params.dinerName} calificó ${params.rating} de 5.`,
+      url: "/admin/opiniones",
+      tag: `feedback-${order.id}-${params.dinerId}`,
+    });
+  }
 }

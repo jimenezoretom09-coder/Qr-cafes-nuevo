@@ -32,6 +32,7 @@ export async function getMenuTree(prisma: PrismaClient): Promise<MenuCategoryDTO
       allergens: item.allergens,
       includesDrink: item.includesDrink,
       isIncludedDrink: item.isIncludedDrink,
+      isAdult: item.isAdult,
       price: item.price.toNumber(),
       available: item.available,
       stationId: item.stationId,

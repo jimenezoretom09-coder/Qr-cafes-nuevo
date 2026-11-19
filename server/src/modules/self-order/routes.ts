@@ -1,6 +1,12 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { findTableByToken, getPublicMenuForTable, getPublicTableStatus, placeSelfServiceOrder } from "./service.js";
+import {
+  findTableByToken,
+  getPublicMenuForTable,
+  getPublicTableStatus,
+  placeSelfServiceOrder,
+  saveFeedback,
+} from "./service.js";
 import { createServiceRequest } from "../service-requests/service.js";
 
 const dinerSchema = {
@@ -29,6 +35,14 @@ const serviceRequestSchema = z.object({
   type: z.enum(["WAITER", "BILL"]),
   billScope: z.enum(["ALL", "MINE"]).optional(),
   paymentHint: z.enum(["CASH", "CARD", "TRANSFER"]).optional(),
+  tipPercent: z.number().int().min(0).max(30).optional(),
+});
+
+const feedbackSchema = z.object({
+  ...dinerSchema,
+  orderId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(500).optional(),
 });
 
 /**
@@ -90,6 +104,23 @@ export default async function selfOrderRoutes(fastify: FastifyInstance) {
 
       const dto = await createServiceRequest(fastify.prisma, fastify.io, { tableId: table.id, ...parsed.data });
       return reply.code(201).send({ id: dto.id, type: dto.type });
+    }
+  );
+
+  // "¿Como estuvo todo?" al terminar. Se guarda para el dueño, sea buena o mala.
+  fastify.post(
+    "/api/public/m/:token/opinion",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { token } = request.params as { token: string };
+      const parsed = feedbackSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+      try {
+        await saveFeedback(fastify.prisma, { token, ...parsed.data });
+        return reply.code(201).send({ ok: true });
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
     }
   );
 }

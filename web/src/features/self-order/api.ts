@@ -24,6 +24,7 @@ export interface PublicMenuItem {
   allergens: string[];
   price: number;
   course: string;
+  isAdult: boolean;
   preparationTimeEstimateMin: number;
   modifierGroups: PublicModifierGroup[];
 }
@@ -40,6 +41,7 @@ export interface PublicBusiness {
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  tipSuggestionPercent: number;
 }
 
 export interface PublicMenuResponse {
@@ -90,6 +92,8 @@ export interface PublicTableStatus {
   tableLabel: string;
   tickets: PublicTicket[];
   pendingRequests: { type: "WAITER" | "BILL"; createdAt: string }[];
+  /** La cuenta que este comensal acaba de pagar aqui: para ofrecerle calificar la visita. */
+  recentVisit: { orderId: string; closedAt: string; alreadyRated: boolean; googleReviewUrl: string | null } | null;
   bill: {
     mine: number;
     table: number;
@@ -123,7 +127,16 @@ export async function fetchTableStatus(token: string, dinerId: string): Promise<
 export async function requestService(
   token: string,
   diner: Diner,
-  params: { type: "WAITER" | "BILL"; billScope?: "ALL" | "MINE"; paymentHint?: "CASH" | "CARD" | "TRANSFER" }
+  params: {
+    type: "WAITER" | "BILL";
+    billScope?: "ALL" | "MINE";
+    paymentHint?: "CASH" | "CARD" | "TRANSFER";
+    tipPercent?: number;
+  }
 ) {
   await api.post(`${base(token)}/llamado`, { ...diner, ...params });
+}
+
+export async function sendFeedback(token: string, diner: Diner, params: { orderId: string; rating: number; comment?: string }) {
+  await api.post(`${base(token)}/opinion`, { ...diner, ...params });
 }
